@@ -170,10 +170,9 @@ and the idle time.
   except to the box's core.
 - `docker-compose.yml` runs it standalone with `read_only: true`, a `/tmp` tmpfs and
   `cap_drop: ALL`.
-- **Not yet run in a container.** The dev PC has no Docker, so neither `docker build`
-  nor the read-only run has been tried. The Dockerfile has the same shape as Bingo's.
-  A copy of the files that would be committed built and passed its tests from scratch
-  (`npm ci`, `npm run build`, `npm test`).
+- **Built by CI only.** The dev PC has no Docker. The publish workflow built 0.1.0 from
+  a clean checkout; the read-only run is first tried on the box. A clean copy of the
+  repo also built and passed its tests locally (`npm ci`, `npm run build`, `npm test`).
 
 ## Standalone
 
@@ -187,11 +186,11 @@ walk-through passes at the root with no box.
 ## The image
 
 - **Name:** `ghcr.io/thezigpc/buzzboard:0.1.0` (the tag equals `version`).
-- **Workflow:** `.github/workflows/publish-image.yml` is in place. **It has not run:**
-  the repo isn't on GitHub yet and nothing is committed.
-- **Still to do, when the user asks for the first release:** create
-  `thezigpc/BuzzBoard`, push `main`, start the first run by hand, make the package
-  public, and check the image pulls anonymously.
+- **Repo:** https://github.com/thezigpc/BuzzBoard (public).
+- **Workflow:** `.github/workflows/publish-image.yml`. The first push triggered it (the
+  new `bargames.json` matched the path filter) and it published 0.1.0 on 2026-11-12.
+- **Public:** an anonymous pull of the 0.1.0 manifest returns 200. The package was
+  public from its first publish; nothing had to be changed by hand.
 
 ## SDK and kit requests
 

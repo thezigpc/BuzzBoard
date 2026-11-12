@@ -4,10 +4,11 @@ A quiz-board game for the **Bar Games box** ("Venuebox"), and playable standalon
 of categories and point values is on the venue's TV; players buzz in from their phones; a
 host runs the game. It joins Bingo and No Filter in the venue's games list.
 
-**Status: built (0.1.0, 2026-11-12), not released.** The whole game, the admin and board
-editor, and the box wiring (level 3) are in place and tested; nothing is committed,
-pushed or installed on a box yet. See "As built" below, [README.md](README.md) for
+**Status: 0.1.0 released (2026-11-12).** The repo is `thezigpc/BuzzBoard` (public), the
+image `ghcr.io/thezigpc/buzzboard:0.1.0` pulls anonymously, and the platform session was
+asked to install it on the box. See "As built" below, [README.md](README.md) for
 players and operators, and [BARGAMES.md](BARGAMES.md) for the box integration report.
+The repo's git identity is set locally (`thezigpc`, the GitHub noreply address), as in Bingo.
 
 ## What it is (the format)
 
@@ -227,5 +228,5 @@ Layout: npm workspaces, the same shape as Bingo.
 **Not built** (only when asked): sounds, a timer on the spoken answer, per-clue images,
 a host-run TV ("host on this screen"), more than two rounds.
 
-**Not verified here:** `docker build` (this PC has no Docker). The Dockerfile follows
-Bingo's; the first run of the publish workflow is the first real build.
+**Docker:** this PC has no Docker. The image is built only by the publish workflow (the
+0.1.0 run succeeded from a clean checkout).
