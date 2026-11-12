@@ -1,0 +1,71 @@
+import { createServer } from "http";
+import { existsSync } from "fs";
+import express from "express";
+import { Server } from "socket.io";
+import { installShutdown, log, serveSpa, SOCKET_SERVER_OPTIONS } from "@bargames/gamekit/server";
+import { DEFAULT_GAME_NAME } from "@buzzboard/shared";
+import { adminAuth, adminRouter } from "./admin/routes.js";
+import { initAdminSettings } from "./admin/settings.js";
+import { bg, displayName, registerBarGames } from "./bargames.js";
+import { initBoards } from "./boards.js";
+import { CLIENT_DIST_PATH, PORT } from "./config.js";
+import { createRooms } from "./rooms/registry.js";
+import { registerSocketHandlers, type IO } from "./socket/index.js";
+
+await initBoards();
+await initAdminSettings();
+await adminAuth.init();
+
+const app = express();
+const httpServer = createServer(app);
+const io: IO = new Server(httpServer, {
+  // Spot half-open mobile connections in ~15 s (10 s ping, 5 s timeout).
+  ...SOCKET_SERVER_OPTIONS,
+  maxHttpBufferSize: 64 * 1024,
+});
+
+const rooms = createRooms({
+  sendState: (socketId, view) => io.to(socketId).emit("state", view),
+  sendClosed: (socketId, reason) => io.to(socketId).emit("closed", { reason }),
+});
+
+// Bar Games: /__bargames/* (venue.json, theme.css, command, status). Before the SPA
+// catch-all, which would otherwise swallow those paths. Off a box it only answers
+// venue.json with "standalone".
+app.use(bg.middleware());
+registerBarGames(rooms);
+
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, rooms: rooms.size });
+});
+// Boards can be long (two rounds of clues); everything else is tiny.
+app.use("/api/admin", express.json({ limit: "512kb" }), adminRouter(rooms));
+app.get("/api/config", async (_req, res) => {
+  // On a Bar Games box: the venue's name for the game. Otherwise GAME_NAME.
+  res.json({ gameName: await displayName(process.env.GAME_NAME || DEFAULT_GAME_NAME) });
+});
+
+if (existsSync(CLIENT_DIST_PATH)) {
+  // The built client, with index.html for every page route. Under a path prefix
+  // (BG_BASE_PATH on a box, BASE_PATH behind your own proxy, which strips it) the page
+  // gets <meta name="bargames-base"> and <base href="/<prefix>/">.
+  serveSpa(app, { dist: CLIENT_DIST_PATH });
+} else {
+  log.warn("boot", "client build not found; serving API only", { path: CLIENT_DIST_PATH });
+}
+
+registerSocketHandlers(io, rooms);
+
+httpServer.listen(PORT, () => {
+  log.info("boot", "listening", { port: PORT });
+});
+
+// SIGTERM/SIGINT (deploys) and crashes: tell every room why, flush the box's room_closed
+// events, give socket.io a moment to deliver, then exit.
+installShutdown(rooms, {
+  restartReason: "The server is restarting for an update. Please rejoin in a minute.",
+  crashReason: "The server hit an unexpected error and had to restart. Please rejoin in a minute.",
+  drainMs: 500,
+  flush: () => bg.flush(),
+  beforeExit: () => void io.close(),
+});

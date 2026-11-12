@@ -1,0 +1,35 @@
+# Buzz Board by itself (no Bar Games box needed):
+#   docker compose up -d --build
+# then open http://localhost:3007
+#
+# Put your own reverse proxy or tunnel in front for a public address. To serve it under
+# a path (https://example.com/quiz/), have the proxy strip the prefix and set BASE_PATH.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${BIND:-127.0.0.1}:${HOST_PORT:-3007}:3007"
+    environment:
+      PORT: "3007"
+      DATA_DIR: /data
+      GAME_NAME: "${GAME_NAME:-Buzz Board}"
+      # Leave unset to choose the admin password on the /admin first-run screen.
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
+      BASE_PATH: "${BASE_PATH:-}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    volumes:
+      # The admin password hash, settings and the venue's boards survive rebuilds.
+      # The image runs as uid 1000: `sudo chown -R 1000:1000 ./data` if root made it.
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3007/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
