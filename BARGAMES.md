@@ -5,9 +5,9 @@
 leaderboards, staff sign-in and the box's admin password, running under a path prefix,
 and announcements at the top or bottom of phones and TVs.
 
-- **SDK:** 0.11.3, vendored at `vendor/bargames-sdk-0.11.3.tgz`.
+- **SDK:** 0.13.0, vendored at `vendor/bargames-sdk-0.13.0.tgz` (0.1.0 shipped on 0.11.3).
 - **Game kit:** 0.7.2, vendored at `vendor/bargames-gamekit-0.7.2.tgz`.
-- **Manifest:** [bargames.json](bargames.json), Buzz Board `0.1.0`, port 3007, with
+- **Manifest:** [bargames.json](bargames.json), Buzz Board `0.1.1`, port 3007, with
   `"routing": { "basePath": true }`.
 
 ```

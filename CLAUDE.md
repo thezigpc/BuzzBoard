@@ -105,7 +105,7 @@ The box, its SDK and the shared game kit are the user's other projects:
 - **A finished game to copy from:** `C:\CodeProjects\BingoDigitalGame` (same stack, level 3,
   roles host/table/player, claims the host confirms). `C:\CodeProjects\NoFilterGame` is the
   other. Read their `CLAUDE.md` and `BARGAMES.md` for how they met each rule.
-- Vendored here: `vendor/bargames-sdk-0.11.3.tgz`, `vendor/bargames-gamekit-0.7.2.tgz`
+- Vendored here: `vendor/bargames-sdk-0.13.0.tgz`, `vendor/bargames-gamekit-0.7.2.tgz`
   (install them as file dependencies, as Bingo does).
 
 ### Rules that are easy to miss
@@ -210,8 +210,8 @@ Layout: npm workspaces, the same shape as Bingo.
 **Things that bit while building:**
 - The TV's root element must not carry a class that a child also uses: `tv-${phase}`
   collided with `.tv-clue` and `.tv-lobby`, so the root's classes are `tv phase-<phase>`.
-- `reportResults()` makes the box emit `game_result`, which must be listed in
-  `bargames.json` `events` or the box rejects it.
+- `reportResults()` makes the box emit `game_result`. SDK 0.11.4+ no longer needs it
+  listed in `bargames.json` `events`; it stays listed, which is harmless.
 - Shell heredocs with several files in one Git Bash call failed here; write files with
   the editor tools.
 
