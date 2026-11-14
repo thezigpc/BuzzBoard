@@ -5,15 +5,15 @@
 leaderboards, staff sign-in and the box's admin password, running under a path prefix,
 and announcements at the top or bottom of phones and TVs.
 
-- **SDK:** 0.13.0, vendored at `vendor/bargames-sdk-0.13.0.tgz` (0.1.0 shipped on 0.11.3).
-- **Game kit:** 0.7.2, vendored at `vendor/bargames-gamekit-0.7.2.tgz`.
-- **Manifest:** [bargames.json](bargames.json), Buzz Board `0.1.1`, port 3007, with
+- **SDK:** 0.13.1, vendored at `vendor/bargames-sdk-0.13.1.tgz` (0.1.0 shipped on 0.11.3).
+- **Game kit:** 0.7.3, vendored at `vendor/bargames-gamekit-0.7.3.tgz`.
+- **Manifest:** [bargames.json](bargames.json), Buzz Board `0.1.2`, port 3007, with
   `"routing": { "basePath": true }`.
 
 ```
 $ npx bargames validate .
 ! image: not pinned by digest; releases should use image@sha256:…
-✓ buzzboard@0.1.0 (sdk level 3)
+✓ buzzboard@0.1.2 (sdk level 3)
 
 $ npx bargames check --game http://127.0.0.1:3018
 buzzboard@0.1.0 · level 3 · http://127.0.0.1:3018
@@ -134,6 +134,14 @@ On a box the page is marked as a shared screen from its first paint
 (`markSharedScreen()`), then `tableMode()` hides the pointer, keeps the screen awake and
 sets the safe margins. The join QR and address come from the SDK's `joinUrl()`, so they
 use the venue's public address.
+
+The address under the QR (TV lobby, TV header, host's lobby) is the kit's `<JoinAddress>`
+(0.7.3) via `Address` in `client/src/components/bits.tsx`: the game's address without the
+scheme or room path, broken after "." and "/", shrunk when long. Each box keeps its own
+width cap (`.tv-join-text` 26vw, `.tv-url` min(44vw, 60vh)); on the TV the shrinking stops
+at 2.8vh (`--join-min`, lower in portrait) so it stays readable. Checked with
+`mock-box --public-url` and a 46-character address at 1920x1080, 1366x768, 1080x1920 and
+3840x2160: nothing overflows, clips or overlaps.
 
 ## Branding and the shared address
 

@@ -2,11 +2,11 @@
   "id": "buzzboard",
   "name": "Buzz Board",
   "kind": "game",
-  "version": "0.1.1",
-  "image": "ghcr.io/thezigpc/buzzboard:0.1.1",
+  "version": "0.1.2",
+  "image": "ghcr.io/thezigpc/buzzboard:0.1.2",
   "port": 3007,
   "sdk": {
-    "version": "0.13.0",
+    "version": "0.13.1",
     "level": 3
   },
   "routes": {

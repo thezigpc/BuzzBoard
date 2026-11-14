@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
+import { addressScale, JoinAddress, shortAddress } from "@bargames/gamekit/client";
 import { joinUrl as venueJoinUrl, type VenueContext } from "@bargames/sdk/client";
 import type { ContestantView, GridView, RoomView } from "@buzzboard/shared";
 
@@ -60,6 +61,19 @@ export const joinUrl = (code: string, venue: VenueContext | null = null) => venu
 
 /** A link without its scheme, for reading off a screen. */
 export const shortUrl = (url: string): string => url.replace(/^https?:\/\//, "");
+
+/** The game's own address from a room link: "https://venue/buzzboard/join/ABCD" -> "venue/buzzboard". */
+export const siteAddress = (url: string): string => shortAddress(url.replace(/\/join\/[^/?#]+([?#].*)?$/, ""));
+
+/**
+ * "Join at <address>", from the kit: breaks after "." and "/", shrinks a long address and
+ * never overflows its box (a venue address has no spaces to wrap at). The box's width is
+ * the caller's CSS. `--join-scale` lets the TV keep a floor under the shrinking (index.css).
+ */
+export function Address({ url, label = "Join at", className }: { url: string; label?: string; className?: string }) {
+  const site = siteAddress(url);
+  return <JoinAddress url={site} label={label} className={className} style={{ ["--join-scale" as string]: addressScale(site) }} />;
+}
 
 /** The board: a column per category, a row per point value. `onPick` makes open squares buttons. */
 export function BoardGrid({

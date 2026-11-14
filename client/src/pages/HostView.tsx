@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { basePath } from "@bargames/gamekit/client";
 import { MIN_WAGER, SETTINGS_LIMITS, type RoomSettings, type RoomView } from "@buzzboard/shared";
-import { BoardGrid, QrCode, Scores, TimerBar, contestant, joinUrl, nameOf, nextUp, pts, roundLabel, shortUrl, standings } from "../components/bits";
+import { Address, BoardGrid, QrCode, Scores, TimerBar, contestant, joinUrl, nameOf, nextUp, pts, roundLabel, shortUrl, standings } from "../components/bits";
 import { TvsPanel } from "../components/TvsPanel";
 import { useVenue } from "../useVenue";
 import type { Act } from "./RoomPage";
@@ -57,7 +57,9 @@ function Lobby({ view, act }: Omit<Props, "skew">) {
         <div>
           <h2>Players join here</h2>
           <p className="join-code">{view.code}</p>
-          <p className="muted small break">{shortUrl(url)}</p>
+          <p className="muted small join-address">
+            <Address url={url} />
+          </p>
         </div>
         <QrCode text={url} size={132} />
       </section>

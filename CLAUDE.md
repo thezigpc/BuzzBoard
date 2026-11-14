@@ -4,7 +4,7 @@ A quiz-board game for the **Bar Games box** ("Venuebox"), and playable standalon
 of categories and point values is on the venue's TV; players buzz in from their phones; a
 host runs the game. It joins Bingo and No Filter in the venue's games list.
 
-**Status: 0.1.0 released (2026-11-12).** The repo is `thezigpc/BuzzBoard` (public), the
+**Status: 0.1.2 released (2026-11-14; 0.1.0 on 2026-11-12).** The repo is `thezigpc/BuzzBoard` (public), the
 image `ghcr.io/thezigpc/buzzboard:0.1.0` pulls anonymously, and the platform session was
 asked to install it on the box. See "As built" below, [README.md](README.md) for
 players and operators, and [BARGAMES.md](BARGAMES.md) for the box integration report.
@@ -105,7 +105,7 @@ The box, its SDK and the shared game kit are the user's other projects:
 - **A finished game to copy from:** `C:\CodeProjects\BingoDigitalGame` (same stack, level 3,
   roles host/table/player, claims the host confirms). `C:\CodeProjects\NoFilterGame` is the
   other. Read their `CLAUDE.md` and `BARGAMES.md` for how they met each rule.
-- Vendored here: `vendor/bargames-sdk-0.13.0.tgz`, `vendor/bargames-gamekit-0.7.2.tgz`
+- Vendored here: `vendor/bargames-sdk-0.13.1.tgz`, `vendor/bargames-gamekit-0.7.3.tgz`
   (install them as file dependencies, as Bingo does).
 
 ### Rules that are easy to miss
@@ -208,6 +208,9 @@ Layout: npm workspaces, the same shape as Bingo.
 - The button fires on `pointerdown`, not on the click that follows.
 
 **Things that bit while building:**
+- The join address under a QR is the kit's `<JoinAddress>` (wrapped as `Address` in
+  `bits.tsx`); keep each box's width cap in CSS, never let a long address widen it. Test
+  with `mock-box --public-url https://<a long invented address>/buzzboard`.
 - The TV's root element must not carry a class that a child also uses: `tv-${phase}`
   collided with `.tv-clue` and `.tv-lobby`, so the root's classes are `tv phase-<phase>`.
 - `reportResults()` makes the box emit `game_result`. SDK 0.11.4+ no longer needs it
