@@ -1,5 +1,5 @@
 import type { RoomView } from "@buzzboard/shared";
-import { Address, BoardGrid, QrCode, Scores, TimerBar, contestant, joinUrl, nameOf, nextUp, pts, roundLabel, standings } from "../components/bits";
+import { Address, BoardGrid, QrCode, Scores, TimerBar, contestant, joinInfo, nameOf, nextUp, pts, roundLabel, standings } from "../components/bits";
 import { useGameName } from "../useGameName";
 import { useVenue } from "../useVenue";
 
@@ -11,7 +11,8 @@ import { useVenue } from "../useVenue";
 export function TableView({ view, skew }: { view: RoomView; skew: number }) {
   const venue = useVenue();
   const gameName = useGameName();
-  const url = joinUrl(view.code, venue);
+  const join = joinInfo(view.code, venue);
+  const url = join.url;
   const logo = venue?.game.theme.logoUrl;
   const lobby = view.phase === "lobby";
 
@@ -26,8 +27,9 @@ export function TableView({ view, skew }: { view: RoomView; skew: number }) {
         {!lobby && (
           <div className="tv-join">
             <span className="tv-join-text">
-              <Address url={url} label="" />
-              <strong>{view.code}</strong>
+              <Address shown={join.shown} label="" tv style={{ alignItems: "flex-end", textAlign: "end" }} />
+              {/* A short room link already carries the code. */}
+              {!join.roomLink && <strong>{view.code}</strong>}
             </span>
             <QrCode text={url} size={96} />
           </div>
@@ -35,7 +37,7 @@ export function TableView({ view, skew }: { view: RoomView; skew: number }) {
       </header>
 
       <section className="tv-stage">
-        {lobby && <Lobby view={view} url={url} />}
+        {lobby && <Lobby view={view} url={url} shown={join.shown} />}
         {view.phase === "board" && view.grid && <BoardGrid grid={view.grid} />}
         {view.phase === "clue" && view.clue && <Clue view={view} skew={skew} />}
         {view.phase === "roundEnd" && (
@@ -58,7 +60,7 @@ export function TableView({ view, skew }: { view: RoomView; skew: number }) {
   );
 }
 
-function Lobby({ view, url }: { view: RoomView; url: string }) {
+function Lobby({ view, url, shown }: { view: RoomView; url: string; shown: string }) {
   const people = view.contestants.flatMap((c) => c.members);
   return (
     <div className="tv-lobby">
@@ -66,7 +68,7 @@ function Lobby({ view, url }: { view: RoomView; url: string }) {
         <p className="tv-kicker">{view.hostOpen ? "Scan to host this game" : "Scan to play"}</p>
         <QrCode text={url} size={420} />
         <p className="tv-url">
-          <Address url={url} />
+          <Address shown={shown} tv />
         </p>
         <p className="tv-code">
           Room code <strong>{view.code}</strong>

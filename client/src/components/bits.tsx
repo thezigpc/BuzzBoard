@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { addressScale, JoinAddress, shortAddress } from "@bargames/gamekit/client";
-import { joinUrl as venueJoinUrl, type VenueContext } from "@bargames/sdk/client";
+import type { CSSProperties } from "react";
+import { JoinAddress } from "@bargames/gamekit/client";
+import { joinDisplay, type VenueContext } from "@bargames/sdk/client";
 import type { ContestantView, GridView, RoomView } from "@buzzboard/shared";
 
 /** Points as text: 1,200 or −300 (a real minus sign, so it reads from across the room). */
@@ -53,26 +54,40 @@ export function QrCode({ text, size = 160 }: { text: string; size?: number }) {
 }
 
 /**
- * A room's join link (and QR code). On a Bar Games box it's on the venue's public
- * address (which a TV opened on an internal address wouldn't know), path prefix
- * included; standalone it's this page's own origin.
+ * How to join a room. `url` is for the QR code: on a Bar Games box it's on the venue's
+ * public address (which a TV opened on an internal address wouldn't know), path prefix
+ * included; standalone it's this page's own origin. `shown` is what to print under it:
+ * the box's short room link ("play.example.net/AB12", box 0.15.6+) when there is one,
+ * else the game's address ("play.example.net/buzzboard"), next to the room code.
  */
-export const joinUrl = (code: string, venue: VenueContext | null = null) => venueJoinUrl(venue, `/join/${code}`);
+export function joinInfo(code: string, venue: VenueContext | null = null): { url: string; shown: string; roomLink: boolean } {
+  const d = joinDisplay(venue, `/join/${code}`, code);
+  return { url: d.url, shown: d.roomShort ?? d.short, roomLink: !!d.roomShort };
+}
 
 /** A link without its scheme, for reading off a screen. */
 export const shortUrl = (url: string): string => url.replace(/^https?:\/\//, "");
 
-/** The game's own address from a room link: "https://venue/buzzboard/join/ABCD" -> "venue/buzzboard". */
-export const siteAddress = (url: string): string => shortAddress(url.replace(/\/join\/[^/?#]+([?#].*)?$/, ""));
-
 /**
  * "Join at <address>", from the kit: breaks after "." and "/", shrinks a long address and
- * never overflows its box (a venue address has no spaces to wrap at). The box's width is
- * the caller's CSS. `--join-scale` lets the TV keep a floor under the shrinking (index.css).
+ * never overflows its box (a venue address has no spaces to wrap at). The box's width and
+ * the smallest size (`--join-min-size`) are the caller's CSS. On the TV (`tv`) it wraps onto
+ * a second line before it shrinks, and shrinks less.
  */
-export function Address({ url, label = "Join at", className }: { url: string; label?: string; className?: string }) {
-  const site = siteAddress(url);
-  return <JoinAddress url={site} label={label} className={className} style={{ ["--join-scale" as string]: addressScale(site) }} />;
+export function Address({
+  shown,
+  label = "Join at",
+  tv = false,
+  align,
+  style,
+}: {
+  shown: string;
+  label?: string;
+  tv?: boolean;
+  align?: "center" | "start";
+  style?: CSSProperties;
+}) {
+  return <JoinAddress url={shown} label={label} align={align} style={style} {...(tv ? { minScale: 0.8, lines: 2 } : {})} />;
 }
 
 /** The board: a column per category, a row per point value. `onPick` makes open squares buttons. */

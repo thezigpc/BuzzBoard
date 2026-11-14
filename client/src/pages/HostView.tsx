@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { basePath } from "@bargames/gamekit/client";
 import { MIN_WAGER, SETTINGS_LIMITS, type RoomSettings, type RoomView } from "@buzzboard/shared";
-import { Address, BoardGrid, QrCode, Scores, TimerBar, contestant, joinUrl, nameOf, nextUp, pts, roundLabel, shortUrl, standings } from "../components/bits";
+import { Address, BoardGrid, QrCode, Scores, TimerBar, contestant, joinInfo, nameOf, nextUp, pts, roundLabel, shortUrl, standings } from "../components/bits";
 import { TvsPanel } from "../components/TvsPanel";
 import { useVenue } from "../useVenue";
 import type { Act } from "./RoomPage";
@@ -45,7 +45,8 @@ export function HostView({ view, skew, act }: Props) {
 
 function Lobby({ view, act }: Omit<Props, "skew">) {
   const venue = useVenue();
-  const url = joinUrl(view.code, venue);
+  const join = joinInfo(view.code, venue);
+  const url = join.url;
   const tvUrl = `${window.location.origin}${basePath()}/room/${view.code}?role=table`;
   const set = (patch: Partial<RoomSettings>) => act("updateSettings", patch);
   const board = view.boards.find((b) => b.id === view.settings.boardId);
@@ -58,7 +59,7 @@ function Lobby({ view, act }: Omit<Props, "skew">) {
           <h2>Players join here</h2>
           <p className="join-code">{view.code}</p>
           <p className="muted small join-address">
-            <Address url={url} />
+            <Address shown={join.shown} align="start" />
           </p>
         </div>
         <QrCode text={url} size={132} />

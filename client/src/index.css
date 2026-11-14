@@ -439,15 +439,11 @@ details > summary {
 .join-card > div {
   min-width: 0;
 }
-.join-address .bargames-join {
-  align-items: flex-start !important;
-  text-align: left !important;
-}
 .join-address {
   font-size: 1rem;
+  --join-min-size: 0.85rem;
 }
 .join-address .bargames-join-address {
-  font-size: max(0.85rem, calc(var(--join-scale, 1) * 1em)) !important;
   font-weight: 600;
   color: var(--text);
 }
@@ -815,13 +811,9 @@ button.grid-cell:active {
   /* The join box's own cap: a long venue address wraps and shrinks inside it, never widens it. */
   max-width: 26vw;
 }
-.tv-join .bargames-join {
-  align-items: flex-end !important;
-  text-align: right !important;
-}
-/* The kit shrinks a long address (down to 0.6em); on the TV keep it readable across a room. */
-.tv .bargames-join-address {
-  font-size: max(var(--join-min, 2.8vh), calc(var(--join-scale, 1) * 1em)) !important;
+/* The kit shrinks a long address; on the TV it stops where it's still readable across a room. */
+.tv {
+  --join-min-size: 2.8vh;
 }
 .tv-join strong {
   display: block;
@@ -1138,7 +1130,7 @@ button.grid-cell:active {
   .tv-url {
     max-width: 90vw;
     font-size: 3vh;
-    --join-min: 2.2vh;
+    --join-min-size: 2.2vh;
   }
   .tv-url .bargames-join-label {
     font-size: 2.4vh;
@@ -1149,9 +1141,18 @@ button.grid-cell:active {
   .tv-code strong {
     font-size: 5vh;
   }
+  .tv-title {
+    font-size: 3vh;
+  }
+  .tv-join {
+    font-size: 1.9vh;
+  }
+  .tv-join strong {
+    font-size: 2.8vh;
+  }
   .tv-join-text {
-    max-width: 50vw;
-    --join-min: 1.8vh;
+    max-width: 44vw;
+    --join-min-size: 1.6vh;
   }
   .tv-lobby .tv-people li {
     font-size: 2.4vh;

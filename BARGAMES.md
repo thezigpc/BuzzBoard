@@ -5,15 +5,15 @@
 leaderboards, staff sign-in and the box's admin password, running under a path prefix,
 and announcements at the top or bottom of phones and TVs.
 
-- **SDK:** 0.13.1, vendored at `vendor/bargames-sdk-0.13.1.tgz` (0.1.0 shipped on 0.11.3).
-- **Game kit:** 0.7.3, vendored at `vendor/bargames-gamekit-0.7.3.tgz`.
-- **Manifest:** [bargames.json](bargames.json), Buzz Board `0.1.2`, port 3007, with
+- **SDK:** 0.13.2, vendored at `vendor/bargames-sdk-0.13.2.tgz` (0.1.0 shipped on 0.11.3).
+- **Game kit:** 0.7.4, vendored at `vendor/bargames-gamekit-0.7.4.tgz`.
+- **Manifest:** [bargames.json](bargames.json), Buzz Board `0.1.3`, port 3007, with
   `"routing": { "basePath": true }`.
 
 ```
 $ npx bargames validate .
 ! image: not pinned by digest; releases should use image@sha256:…
-✓ buzzboard@0.1.2 (sdk level 3)
+✓ buzzboard@0.1.3 (sdk level 3)
 
 $ npx bargames check --game http://127.0.0.1:3018
 buzzboard@0.1.0 · level 3 · http://127.0.0.1:3018
@@ -135,13 +135,21 @@ On a box the page is marked as a shared screen from its first paint
 sets the safe margins. The join QR and address come from the SDK's `joinUrl()`, so they
 use the venue's public address.
 
-The address under the QR (TV lobby, TV header, host's lobby) is the kit's `<JoinAddress>`
-(0.7.3) via `Address` in `client/src/components/bits.tsx`: the game's address without the
-scheme or room path, broken after "." and "/", shrunk when long. Each box keeps its own
-width cap (`.tv-join-text` 26vw, `.tv-url` min(44vw, 60vh)); on the TV the shrinking stops
-at 2.8vh (`--join-min`, lower in portrait) so it stays readable. Checked with
-`mock-box --public-url` and a 46-character address at 1920x1080, 1366x768, 1080x1920 and
-3840x2160: nothing overflows, clips or overlaps.
+The address under the QR (TV lobby, TV header, host's lobby) comes from the SDK's
+`joinDisplay(venue, "/join/<code>", code)` through `joinInfo()` in
+`client/src/components/bits.tsx`. The QR keeps its `url`. The text is the box's short room
+link (`roomShort`, "play.example.net/AB12", box 0.15.6+) when the box serves them, else the
+game's address (`short`). With a room link the TV header drops the separate code (the link
+carries it); the lobby still shows it big. The status gives every room a `joinPath`
+(`/join/<code>`), so the short link resolves for venue and patron rooms.
+
+It's printed with the kit's `<JoinAddress>` (0.7.4): broken after "." and "/", and on the TV
+`lines: 2, minScale: 0.8` with `--join-min-size: 2.8vh` (lower in portrait), so a long address
+wraps before it shrinks and stays readable. Each box keeps its own width cap (`.tv-join-text`
+26vw, `.tv-url` min(44vw, 60vh)). Checked through the mock box with a long room link
+(`play.the-hollow-oak-tavern-grill.net/AB12`) and, with room links off, the 46-character game
+address, at 1920x1080, 1366x768, 1080x1920 and 3840x2160, and on the host's phone and iPad:
+nothing overflows, clips or overlaps.
 
 ## Branding and the shared address
 
