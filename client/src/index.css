@@ -1311,3 +1311,22 @@ button.grid-cell:active {
     transition: none !important;
   }
 }
+
+/* ------------------------------------------------------------ co-hosts */
+.badge {
+  display: inline-block;
+  margin-left: 0.4em;
+  padding: 0.05em 0.5em;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--bg, #000);
+  font-size: 0.75em;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.invite-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}

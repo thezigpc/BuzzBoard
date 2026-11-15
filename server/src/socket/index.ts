@@ -10,7 +10,7 @@ import {
 import { log } from "@bargames/gamekit/server";
 import { clientIp, tvs } from "../bargames.js";
 import { GameError } from "../rooms/errors.js";
-import { preciseNow, type Member, type Room } from "../rooms/Room.js";
+import { cohostPath, preciseNow, type Member, type Room } from "../rooms/Room.js";
 import { HOST_CLOSE_REASON, type Rooms } from "../rooms/registry.js";
 
 interface SocketData {
@@ -84,6 +84,10 @@ export function registerSocketHandlers(io: IO, rooms: Rooms): void {
     const bind = (room: Room, member: Member): JoinResult => {
       if (socket.data.code !== room.code || socket.data.memberId !== member.id) unbind();
       room.attachSocket(member, socket.id);
+      // "First joiner hosts": once anyone holds the host seat (staff's host link, or the
+      // first phone), the next phone is a player (the kit's HostSeats.hostAttached). Before
+      // 0.2.0 a phone joining after staff opened the host link got the same seat.
+      room.noteAttached(member);
       socket.data.code = room.code;
       socket.data.memberId = member.id;
       return { code: room.code, token: member.token, memberId: member.id, role: member.role, name: member.name };
@@ -116,20 +120,26 @@ export function registerSocketHandlers(io: IO, rooms: Rooms): void {
         }
       });
     }
-    /** The same, for the host only. */
+    /** The same, for the host only (ending, removing people, co-hosts). */
     const onHost = <A>(event: keyof ClientToServerEvents, fn: (room: Room, arg: A) => object | void) =>
       on<A>(event, (room, id, arg) => {
         room.requireHost(id);
         return fn(room, arg);
       });
+    /** The same, for the host or a co-host (running the game). */
+    const onRunner = <A>(event: keyof ClientToServerEvents, fn: (room: Room, arg: A) => object | void) =>
+      on<A>(event, (room, id, arg) => {
+        room.requireRunner(id);
+        return fn(room, arg);
+      });
 
-    /** Host only and async (the venue-TV calls go to the box). No broadcast. */
+    /** Host or co-host, async (the venue-TV calls go to the box). No broadcast. */
     function onHostAsync<A>(event: keyof ClientToServerEvents, fn: (room: Room, arg: A) => Promise<object>) {
       listen(event, async (...args) => {
         const { ack, arg } = split<A>(args);
         try {
           const { room, memberId } = current();
-          room.requireHost(memberId);
+          room.requireRunner(memberId);
           const result = await fn(room, arg);
           if (typeof ack === "function") ack({ ok: true, ...result });
         } catch (err) {
@@ -215,15 +225,22 @@ export function registerSocketHandlers(io: IO, rooms: Rooms): void {
       try {
         const room = findRoom(req?.code);
         if (req.role !== "player" && req.role !== "table") throw new GameError("BAD_REQUEST");
-        // A known token means "same seat again", never a second seat.
-        const existing = req.token ? room.findByToken(req.token) : undefined;
-        const member =
-          existing ??
-          (req.role === "table"
-            ? room.addTable()
-            : room.hostOpen
-              ? room.claimHostSeat(req.name) // a box room nobody hosts yet: the first phone in does
-              : room.addPlayer(req.name, req.team));
+        // A known token (or the host link's key) means "same seat again", never a second seat.
+        const existing = room.seatFor(req.token);
+        let member: Member;
+        if (req.cohost !== undefined) {
+          // A co-host invite (the host's or the box's "Add a co-host" QR): single use.
+          if (req.role !== "player" || !room.seats.redeem(req.cohost)) throw new GameError("BAD_INVITE");
+          member = room.seatCohost(existing, req.name);
+        } else {
+          member =
+            existing ??
+            (req.role === "table"
+              ? room.addTable()
+              : room.seats.offerOpen
+                ? room.claimHostSeat(req.name) // a box room nobody hosts yet: the first phone in does
+                : room.addPlayer(req.name, req.team));
+        }
         const result = bind(room, member);
         log.info("room", existing ? "rejoined" : "joined", { code: room.code, role: member.role, name: member.name });
         ack({ ok: true, ...result });
@@ -238,10 +255,11 @@ export function registerSocketHandlers(io: IO, rooms: Rooms): void {
     socket.on("resume", (req, ack) => {
       try {
         const room = findRoom(req?.code);
-        const member = room.findByToken(String(req?.token ?? ""));
+        const member = room.seatFor(req?.token);
         if (!member) {
           noteJoinFail(ip);
-          throw new GameError("BAD_TOKEN");
+          // An old host link (after a take-over) says so; anything else is an expired seat.
+          throw new GameError(req?.host ? "BAD_HOST_LINK" : "BAD_TOKEN");
         }
         const result = bind(room, member);
         log.info("room", "resumed", { code: room.code, role: member.role, name: member.name });
@@ -281,25 +299,37 @@ export function registerSocketHandlers(io: IO, rooms: Rooms): void {
       }
     });
 
-    // ------------------------------------------------------- host only
-    onHost<Partial<RoomSettings>>("updateSettings", (room, patch) => room.updateSettings(patch ?? {}));
-    onHost("startGame", (room) => room.startGame());
-    onHost("openBuzzers", (room) => room.openBuzzers());
-    onHost<{ correct: boolean }>("judge", (room, req) => room.judge(req?.correct === true));
-    onHost("skipClue", (room) => room.skipClue());
-    onHost("cancelClue", (room) => room.cancelClue());
-    onHost("continueGame", (room) => room.continueGame());
-    onHost("nextRound", (room) => room.nextRound());
-    onHost("lastCallAdvance", (room) => room.lastCallAdvance());
-    onHost<{ correct: boolean }>("lastCallJudge", (room, req) => room.lastCallJudge(req?.correct === true));
-    onHost<{ contestantId: string; delta: number }>("adjustScore", (room, req) =>
+    // ---------------------------------------------- host or co-host
+    onRunner<Partial<RoomSettings>>("updateSettings", (room, patch) => room.updateSettings(patch ?? {}));
+    onRunner("startGame", (room) => room.startGame());
+    onRunner("openBuzzers", (room) => room.openBuzzers());
+    onRunner<{ correct: boolean }>("judge", (room, req) => room.judge(req?.correct === true));
+    onRunner("skipClue", (room) => room.skipClue());
+    onRunner("cancelClue", (room) => room.cancelClue());
+    onRunner("continueGame", (room) => room.continueGame());
+    onRunner("nextRound", (room) => room.nextRound());
+    onRunner("lastCallAdvance", (room) => room.lastCallAdvance());
+    onRunner<{ correct: boolean }>("lastCallJudge", (room, req) => room.lastCallJudge(req?.correct === true));
+    onRunner<{ contestantId: string; delta: number }>("adjustScore", (room, req) =>
       room.adjustScore(String(req?.contestantId ?? ""), req?.delta),
     );
-    onHost<{ contestantId: string }>("setPicker", (room, req) => room.setPicker(String(req?.contestantId ?? "")));
-    onHost("playAgain", (room) => room.playAgain());
+    onRunner<{ contestantId: string }>("setPicker", (room, req) => room.setPicker(String(req?.contestantId ?? "")));
+    onRunner("playAgain", (room) => room.playAgain());
+
+    // ------------------------------------------------------- host only
     onHost<string>("kickPlayer", (room, target) => {
       if (target === room.hostId || !room.members.has(target)) throw new GameError("BAD_REQUEST");
       room.removeMember(target, "The host removed you from the room.");
+    });
+    // Co-hosts (0.2.0): the host hands out single-use invites and removes co-hosts.
+    onHost("cohostInvite", (room) => {
+      const inv = room.seats.invite();
+      log.info("room", "co-host invite", { code: room.code, expiresAt: inv.expiresAt });
+      return { path: cohostPath(room, inv.token), expiresAt: inv.expiresAt };
+    });
+    onHost<string>("removeCohost", (room, target) => {
+      if (!room.seats.isCohost(String(target))) throw new GameError("BAD_REQUEST");
+      room.demoteCohost(String(target));
     });
 
     // ------------------------------- the host, or the player in control

@@ -94,8 +94,29 @@ function Room({ code }: { code: string }) {
     socket: socket as unknown as Parameters<typeof useRoomConnection>[1]["socket"],
     call,
     sessions,
+    // A host link's key resumes the host seat once; from then on this phone keeps the
+    // seat's own token (a take-over changes the key but leaves it seated as a co-host).
+    resumeArgs: (s) => ({ code: s.roomCode, token: s.token, host: s.hostLink === true }),
+    onResumed: (ack, s) => {
+      const r = ack as Partial<JoinResult>;
+      sessions.save({
+        roomCode: s.roomCode,
+        token: typeof r.token === "string" ? r.token : s.token,
+        name: typeof r.name === "string" ? r.name : s.name,
+        role: r.role ?? s.role,
+      });
+    },
   });
   const { act, toast, setToast } = useAction();
+
+  // One-off messages for this phone: staff took over hosting, or a co-host plays again.
+  useEffect(() => {
+    const onNotice = (p: { message: string }) => setToast(p.message);
+    socket.on("notice", onNotice);
+    return () => {
+      socket.off("notice", onNotice);
+    };
+  }, [setToast]);
 
   // A TV on a Bar Games box: the SDK's tableMode hides the pointer, keeps the screen
   // awake, sets safe margins (--bg-safe-x/y) and shows the standard "Reconnecting…" /
@@ -123,7 +144,8 @@ function Room({ code }: { code: string }) {
     return (
       <main className="center-page">
         <div className="panel">
-          <h2>Room closed</h2>
+          {/* An old host link or an expired seat: the room may well be open, just not to this link. */}
+          <h2>{/expired|not in this room/i.test(closedReason) ? "Can't get you in" : "Room closed"}</h2>
           <p>{closedReason}</p>
           {!isTv && (
             <Link className="btn btn-primary" to="/">
@@ -144,6 +166,7 @@ function Room({ code }: { code: string }) {
   }
 
   const leave = async () => {
+    // Only the host's ✕ ends the room; a co-host leaves it.
     const msg = view.you.role === "host" ? "End this room for everyone?" : "Leave this room?";
     if (!window.confirm(msg)) return;
     await call("leaveRoom").catch(() => {});
@@ -164,6 +187,7 @@ function Room({ code }: { code: string }) {
             <span className="room-code">{view.code}</span>
             <span className="muted">
               {view.you.role === "host" ? "Host" : view.you.name}
+              {view.you.role === "cohost" && <span className="badge">Co-host</span>}
               {roundLabel(view) && ` · ${roundLabel(view)}`}
             </span>
           </div>
@@ -177,7 +201,7 @@ function Room({ code }: { code: string }) {
           </div>
         </header>
       )}
-      {view.you.role === "host" && <HostView view={view} skew={skew} act={act} />}
+      {(view.you.role === "host" || view.you.role === "cohost") && <HostView view={view} skew={skew} act={act} />}
       {view.you.role === "player" && <PlayerView view={view} skew={skew} act={act} online={status === "online"} />}
       {isTv && <TableView view={view} skew={skew} />}
       {toast && (

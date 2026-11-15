@@ -24,6 +24,7 @@ import {
 } from "@buzzboard/shared";
 import {
   cryptoRand,
+  HostSeats,
   log,
   newId,
   newToken,
@@ -94,7 +95,16 @@ interface LastCallState {
 export interface RoomTransport {
   sendState(socketId: string, view: RoomView): void;
   sendClosed(socketId: string, reason: string): void;
+  /** A one-off message for one phone (a take-over, or a co-host made a player again). */
+  sendNotice(socketId: string, message: string): void;
 }
+
+/** The links the host key and co-host invites go in (the box's host_link / cohost_link too). */
+export const hostPath = (room: { code: string }, token: string) => `/join/${room.code}?host=${encodeURIComponent(token)}`;
+export const cohostPath = (room: { code: string }, token: string) => `/join/${room.code}?cohost=${encodeURIComponent(token)}`;
+
+export const TAKEOVER_NOTICE = "Staff took over hosting. You're a co-host now: you can still run the game.";
+export const COHOST_REMOVED_NOTICE = "You're not a co-host any more. You're playing now.";
 
 /** The server's clock with sub-millisecond steps: buzzes are ordered and timed on it. */
 export const preciseNow = (): number => performance.timeOrigin + performance.now();
@@ -129,8 +139,13 @@ export class Room implements KitRoom {
   kind: SessionKind;
   /** Optional title from the box's create_room. */
   title?: string;
-  /** A box room with nobody hosting yet: the first phone to join takes the host seat. */
-  hostOpen = false;
+  /**
+   * Who may host (the game kit's HostSeats, kit 0.8.0): the host link's key, the box's
+   * "first joiner hosts" offer (closed on ANY attach to the host seat, staff's host link
+   * included), take-overs and single-use co-host invites. Member roles mirror it: the
+   * seat's member is "host", co-hosts are "cohost". createVenueRoom replaces it.
+   */
+  seats = new HostSeats();
 
   /** Set by the room registry: closes just this room if one of its timers throws. */
   onFatalError: (err: unknown) => void = () => {};
@@ -156,10 +171,86 @@ export class Room implements KitRoom {
   /** The first phone to join a "first joiner hosts" room becomes its host. */
   claimHostSeat(rawName: string | undefined): Member {
     const host = this.members.get(this.hostId);
-    if (!this.hostOpen || !host) throw new GameError("BAD_REQUEST");
-    this.hostOpen = false;
+    if (!host || this.seats.claimForJoiner() !== "host") throw new GameError("BAD_REQUEST");
     host.name = cleanName(rawName) || "Host";
     return host;
+  }
+
+  /**
+   * The seat a token opens: a member's own token, or the host link's key (the host seat;
+   * the phone then keeps that member's own token, so a later take-over, which changes the
+   * key, leaves it seated as a co-host).
+   */
+  seatFor(token: unknown): Member | undefined {
+    if (typeof token !== "string" || !token) return undefined;
+    return this.findByToken(token) ?? (this.seats.isHostToken(token) ? this.members.get(this.hostId) : undefined);
+  }
+
+  /** Anyone attached to a seat. For the host seat this closes the first-joiner offer. */
+  noteAttached(member: Member): void {
+    if (member.role === "host") this.seats.hostAttached(member.id);
+  }
+
+  cohosts(): Member[] {
+    return [...this.members.values()].filter((m) => m.role === "cohost");
+  }
+
+  /**
+   * A co-host invite was redeemed: a new co-host under this name, or a player already in
+   * the room promoted (they stop playing). A host, co-host or TV stays what it is.
+   */
+  seatCohost(existing: Member | undefined, rawName: string | undefined): Member {
+    if (existing && existing.role !== "player") return existing;
+    let m = existing;
+    if (m) {
+      const old = m.contestantId;
+      m.role = "cohost";
+      m.contestantId = null;
+      if (old) this.dropIfEmpty(old);
+      this.playersChanged();
+    } else {
+      const name = cleanName(rawName);
+      if (!name) throw new GameError("NAME_REQUIRED");
+      if (this.nameTaken(name)) throw new GameError("NAME_TAKEN");
+      if (this.cohosts().length >= MAX_PLAYERS_PER_ROOM) throw new GameError("ROOM_FULL");
+      m = this.newMember("cohost", name);
+    }
+    this.seats.addCohost(m.id);
+    return m;
+  }
+
+  /**
+   * Staff took over (the box's host_link; the kit already made a new host key and listed the
+   * previous holder as a co-host). The previous host's phone stays on as a co-host, and a
+   * fresh host seat waits for the new link. Nobody attached yet: nothing to move.
+   */
+  takeOver(previous: string | undefined): void {
+    const old = previous ? this.members.get(previous) : undefined;
+    if (!old || old.role !== "host") return;
+    old.role = "cohost";
+    this.hostId = this.newMember("host", "Venue").id;
+    this.notify(old, TAKEOVER_NOTICE);
+  }
+
+  /** A co-host plays again: their own seat (solo), or a team under their name (teams). */
+  demoteCohost(memberId: string): void {
+    const m = this.members.get(memberId);
+    this.seats.removeCohost(memberId);
+    if (!m || m.role !== "cohost") return;
+    if (this.players().some((p) => same(p.name, m.name))) m.name = `${m.name} (co-host)`.slice(0, NAME_MAX);
+    const contestant = this.settings.teams ? this.teamNamed(m.name) : this.newContestant(m.name);
+    m.role = "player";
+    m.contestantId = contestant.id;
+    this.playersChanged();
+    this.notify(m, COHOST_REMOVED_NOTICE);
+  }
+
+  private nameTaken(name: string): boolean {
+    return [...this.members.values()].some((m) => (m.role === "player" || m.role === "cohost") && same(m.name, name));
+  }
+
+  private notify(m: Member, message: string): void {
+    for (const sid of m.socketIds) this.transport.sendNotice(sid, message);
   }
 
   addTable(): Member {
@@ -174,7 +265,7 @@ export class Room implements KitRoom {
     if (!name) throw new GameError("NAME_REQUIRED");
     const players = this.players();
     if (players.length >= MAX_PLAYERS_PER_ROOM) throw new GameError("ROOM_FULL");
-    if (players.some((p) => same(p.name, name))) throw new GameError("NAME_TAKEN");
+    if (this.nameTaken(name)) throw new GameError("NAME_TAKEN");
     const contestant = this.settings.teams ? this.teamNamed(rawTeam) : this.newContestant(name);
     const m = this.newMember("player", name);
     m.contestantId = contestant.id;
@@ -229,6 +320,7 @@ export class Room implements KitRoom {
     if (!m) return;
     for (const sid of m.socketIds) this.transport.sendClosed(sid, reason);
     this.members.delete(memberId);
+    this.seats.removeCohost(memberId);
     if (m.role !== "player") return;
     if (m.contestantId) this.dropIfEmpty(m.contestantId);
     this.playersChanged();
@@ -264,8 +356,14 @@ export class Room implements KitRoom {
     return this.ranked().sort((a, b) => a.score - b.score || a.seq - b.seq)[0];
   }
 
+  /** The host only: ending the room, removing people, co-host invites and removals. */
   requireHost(memberId: string): void {
-    if (memberId !== this.hostId) throw new GameError("NOT_HOST");
+    if (this.seats.roleOf(memberId) !== "host") throw new GameError("NOT_HOST");
+  }
+
+  /** The host or a co-host: running the game (settings, start, buzzers, judging, scores). */
+  requireRunner(memberId: string): void {
+    if (!this.seats.canRun(memberId)) throw new GameError("NOT_HOST");
   }
 
   requirePlayer(memberId: string): Member {
@@ -276,7 +374,7 @@ export class Room implements KitRoom {
 
   /** The host, or any phone of the contestant in control. */
   private requireHostOrPicker(memberId: string, pickerAllowed = true): void {
-    if (memberId === this.hostId) return;
+    if (this.seats.canRun(memberId)) return;
     const m = this.members.get(memberId);
     if (!pickerAllowed || !m?.contestantId || m.contestantId !== this.pickerId) throw new GameError("NOT_YOUR_PICK");
   }
@@ -829,7 +927,8 @@ export class Room implements KitRoom {
   }
 
   viewFor(m: Member): RoomView {
-    const isHost = m.id === this.hostId;
+    // Host and co-hosts see the answers and the boards: they run the game.
+    const isHost = m.role === "host" || m.role === "cohost";
     const players = this.players();
     const round = this.board && this.roundIndex >= 0 ? this.board.rounds[this.roundIndex] : null;
     const inGame = this.phase !== "lobby" && this.board !== null;
@@ -872,7 +971,8 @@ export class Room implements KitRoom {
       clue: this.phase === "clue" ? this.clueView(isHost) : null,
       lastCall: this.phase === "lastCall" || this.phase === "final" ? this.lastCallView(m, isHost) : null,
       winners: this.winners.slice(),
-      hostOpen: this.hostOpen,
+      hostOpen: this.seats.offerOpen,
+      cohosts: isHost ? this.cohosts().map((c) => ({ id: c.id, name: c.name, connected: c.socketIds.size > 0 })) : [],
       hostConnected: this.hostConnected(),
       tableCount: this.tableCount(),
       boards: isHost && this.phase === "lobby" ? listBoards() : [],

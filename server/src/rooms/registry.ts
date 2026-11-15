@@ -2,7 +2,7 @@
 // (a box's venue room stays open while a TV shows it), close causes, crash containment
 // and debounced players_changed.
 
-import { RoomRegistry, type SessionKind } from "@bargames/gamekit/server";
+import { HostSeats, RoomRegistry, type SessionKind } from "@bargames/gamekit/server";
 import type { AdminRoomSummary } from "@buzzboard/shared";
 import { defaultBoardId, getAdminSettings } from "../admin/settings.js";
 import { MAX_ROOMS, ROOM_SWEEP_INTERVAL_MS } from "../config.js";
@@ -41,8 +41,9 @@ export function createRooms(transport: RoomTransport): Rooms {
 
 /**
  * A room nobody's phone created: the box's create_room. It gets an empty host seat
- * (named "Venue") whose token is the hostUrl, so staff can run it from the iPad. With
- * firstJoinerHosts, the first phone to join takes that seat instead.
+ * (named "Venue") that the host link's key opens (the hostUrl; the kit's HostSeats), so
+ * staff can run it from the iPad. With firstJoinerHosts the first phone to join takes
+ * that seat instead, until anyone attaches to it (staff's link included).
  */
 export function createVenueRoom(
   rooms: Rooms,
@@ -53,8 +54,9 @@ export function createVenueRoom(
   let hostToken = "";
   const room = rooms.create(kind, (r) => {
     r.title = title?.trim().slice(0, 60) || undefined;
-    hostToken = r.addHost("Venue").token;
-    r.hostOpen = firstJoinerHosts;
+    r.addHost("Venue");
+    r.seats = new HostSeats({ firstJoinerHosts });
+    hostToken = r.seats.hostToken;
   });
   return { room, hostToken };
 }

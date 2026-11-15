@@ -2,11 +2,11 @@
   "id": "buzzboard",
   "name": "Buzz Board",
   "kind": "game",
-  "version": "0.1.3",
-  "image": "ghcr.io/thezigpc/buzzboard:0.1.3",
+  "version": "0.2.0",
+  "image": "ghcr.io/thezigpc/buzzboard:0.2.0",
   "port": 3007,
   "sdk": {
-    "version": "0.13.2",
+    "version": "0.14.0",
     "level": 3
   },
   "routes": {
@@ -33,7 +33,10 @@
     "create_room",
     "start",
     "next_round",
-    "end"
+    "end",
+    "host_link",
+    "cohost_link",
+    "remove_cohost"
   ],
   "sessionKinds": [
     "venue",

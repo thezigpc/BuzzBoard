@@ -140,3 +140,53 @@ test("the TV: joins with just the code, sees no answers, and can't run anything"
     assert.equal(res.ok, false, ev);
   }
 });
+
+test("co-hosts: the host's single-use invite, running the game, leaving, and being removed", async () => {
+  const { code, host, players: [ann] } = await setupRoom(server, ["Ann"]);
+  // Only the host invites.
+  assert.match((await ann.emit("cohostInvite")).error, /only the host/i);
+  const inv = await host.ok("cohostInvite");
+  assert.match(inv.path, new RegExp(`^/join/${code}\\?cohost=`));
+  assert.ok(Date.parse(inv.expiresAt) > Date.now());
+  const token = new URLSearchParams(inv.path.split("?")[1]).get("cohost");
+
+  // A player already in the room is promoted: off the scoreboard, onto the host screen.
+  const seat = await ann.ok("joinRoom", { code, role: "player", name: "Ann", token: ann.token, cohost: token });
+  assert.equal(seat.role, "cohost");
+  assert.equal(seat.memberId, ann.memberId, "the same seat");
+  let s = await host.waitFor((v) => v.cohosts.length === 1 && v.contestants.length === 0, "Ann co-hosts");
+  assert.deepEqual(s.cohosts.map((c) => c.name), ["Ann"]);
+  // Used once.
+  const bo = await server.client();
+  assert.equal((await bo.emit("joinRoom", { code, role: "player", name: "Bo", cohost: token })).ok, false);
+  await bo.ok("joinRoom", { code, role: "player", name: "Bo" });
+  // A name a co-host holds is taken.
+  assert.match((await (await server.client()).emit("joinRoom", { code, role: "player", name: "ann" })).error, /already has that name/i);
+
+  // The co-host runs the game (settings too); a player sees no co-host list.
+  await ann.ok("updateSettings", { buzzSeconds: 12 });
+  await ann.ok("startGame");
+  await ann.ok("pickSquare", { cat: 0, row: 0 });
+  await ann.ok("openBuzzers");
+  await bo.ok("buzz");
+  await ann.ok("judge", { correct: true });
+  assert.deepEqual((await bo.waitFor((v) => v.phase === "clue")).cohosts, []);
+  assert.match((await ann.emit("kickPlayer", host.state.you.id)).error, /only the host/i);
+  assert.match((await ann.emit("removeCohost", ann.memberId)).error, /only the host/i);
+
+  // The host removes the co-host: a player again, on 0, in their own seat.
+  await host.ok("removeCohost", ann.memberId);
+  s = await ann.waitFor((v) => v.you.role === "player", "Ann plays again");
+  assert.equal(scoreOf(s, "Ann"), 0);
+  assert.equal((await host.emit("removeCohost", ann.memberId)).ok, false, "not a co-host any more");
+
+  // A new co-host who leaves doesn't end the room.
+  const inv2 = await host.ok("cohostInvite");
+  const cy = await server.client();
+  const cySeat = await cy.ok("joinRoom", { code, role: "player", name: "Cy", cohost: new URLSearchParams(inv2.path.split("?")[1]).get("cohost") });
+  assert.equal(cySeat.role, "cohost");
+  await host.waitFor((v) => v.cohosts.length === 1, "Cy co-hosts");
+  await cy.ok("leaveRoom");
+  await host.waitFor((v) => v.cohosts.length === 0, "Cy left");
+  assert.equal(host.closedReason, null);
+});

@@ -4,7 +4,7 @@ A quiz-board game for the **Bar Games box** ("Venuebox"), and playable standalon
 of categories and point values is on the venue's TV; players buzz in from their phones; a
 host runs the game. It joins Bingo and No Filter in the venue's games list.
 
-**Status: 0.1.3 released (2026-11-14; 0.1.0 on 2026-11-12).** The repo is `thezigpc/BuzzBoard` (public), the
+**Status: 0.2.0 released (2026-11-15; 0.1.0 on 2026-11-12).** The repo is `thezigpc/BuzzBoard` (public), the
 image `ghcr.io/thezigpc/buzzboard:0.1.0` pulls anonymously, and the platform session was
 asked to install it on the box. See "As built" below, [README.md](README.md) for
 players and operators, and [BARGAMES.md](BARGAMES.md) for the box integration report.
@@ -59,7 +59,11 @@ Change these only on purpose; `test/specs/02-game-flow.test.mjs` pins each one.
 - **Winner:** the highest score; a tie is a shared win. Scores can go below zero.
 - **Latecomers** join on 0 at any time, but only watch a Last Call already under way.
 - **The host doesn't play.** In a room whose host seat is open (`firstJoinerHosts`), the
-  first phone to join becomes the host.
+  first phone to join becomes the host, until anyone holds the seat (staff's host link too).
+- **Co-hosts** (0.2.0) run the game beside the host and don't play: from a staff take-over
+  (the box's `host_link`; the old host stays on as a co-host) or a single-use invite (the
+  host's "Add a co-host" QR, or the box's `cohost_link`). They can't end the room, remove
+  players or manage co-hosts. A removed co-host plays again, on 0.
 - **Play again** returns to the lobby with the same players on 0.
 
 ## Names and content: keep it original
@@ -105,7 +109,7 @@ The box, its SDK and the shared game kit are the user's other projects:
 - **A finished game to copy from:** `C:\CodeProjects\BingoDigitalGame` (same stack, level 3,
   roles host/table/player, claims the host confirms). `C:\CodeProjects\NoFilterGame` is the
   other. Read their `CLAUDE.md` and `BARGAMES.md` for how they met each rule.
-- Vendored here: `vendor/bargames-sdk-0.13.2.tgz`, `vendor/bargames-gamekit-0.7.4.tgz`
+- Vendored here: `vendor/bargames-sdk-0.14.0.tgz`, `vendor/bargames-gamekit-0.8.0.tgz`
   (install them as file dependencies, as Bingo does).
 
 ### Rules that are easy to miss
@@ -187,7 +191,7 @@ Layout: npm workspaces, the same shape as Bingo.
   seat; `?role=table` joins as a TV by itself), `HostView`, `PlayerView`, `TableView`,
   `AdminPage`; `components/BoardEditor.tsx` (the editor, import, export),
   `TvsPanel.tsx` (casting, box only), `bits.tsx` (grid, scores, timer bar, QR).
-- `test/specs/`: 54 specs. `harness.mjs` starts a throwaway server per spec file;
+- `test/specs/`: 58 specs. `harness.mjs` starts a throwaway server per spec file;
   `tinyBoard()` is a 2x2 board so games are short.
 
 **The buzzer** (the brief's "hard part"):
@@ -206,6 +210,12 @@ Layout: npm workspaces, the same shape as Bingo.
   client uses the kit's `SOCKET_OPTIONS` (WebSocket first) and shows "Reconnecting" in
   place of the buzzer while it has no WebSocket (`canBuzz()` in `client/src/socket.ts`).
 - The button fires on `pointerdown`, not on the click that follows.
+
+**Host seats (0.2.0):** the kit's `HostSeats` in `room.seats` decides who hosts; member
+roles mirror it (`host`, `cohost`). `seatFor(token)` opens a seat by its own token or the
+host link's key; `bind()` calls `noteAttached()` so any attach closes the first-joiner
+offer. Gate game actions with `requireRunner`, and ending / removing / co-host
+management with `requireHost`. See BARGAMES.md "Hosts and co-hosts".
 
 **Things that bit while building:**
 - The join address under a QR: `joinInfo()` (SDK `joinDisplay`: the box's short room link

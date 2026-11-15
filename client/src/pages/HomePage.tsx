@@ -41,7 +41,10 @@ export function HomePage() {
       live = false;
     };
   }, [code]);
-  const teams = info?.teams === true && !info.hostOpen;
+  // /join/ABCD?cohost=<invite>: the host's (or the box's) "Add a co-host" QR. Single use;
+  // the phone joins as a co-host under the name typed (a player here is promoted).
+  const cohostInvite = search.get("cohost") ?? undefined;
+  const teams = info?.teams === true && !info.hostOpen && !cohostInvite;
   const teamName = team === NEW_TEAM ? newTeam.trim() : team;
 
   const enter = (r: JoinResult) => {
@@ -72,16 +75,25 @@ export function HomePage() {
       const token = existing?.roomCode === roomCode && existing.role !== "table" ? existing.token : undefined;
       rememberName(name.trim());
       if (teams && teamName) rememberTeam(teamName);
-      enter(await call<JoinResult>("joinRoom", { code: roomCode, role: "player", name: name.trim(), team: teams ? teamName : undefined, token }));
+      enter(
+        await call<JoinResult>("joinRoom", {
+          code: roomCode,
+          role: "player",
+          name: name.trim(),
+          team: teams ? teamName : undefined,
+          token,
+          cohost: cohostInvite,
+        }),
+      );
     });
 
-  // /join/ABCD?host=<seat token>: a Bar Games box's "Open the host controls" link for a
-  // room it created (no host phone). It takes that room's host seat; the room page
-  // resumes it like any reload.
+  // /join/ABCD?host=<key>: a Bar Games box's host link (create_room's hostUrl, or "Take
+  // over as host"). The room page resumes the host seat with the key, then keeps the
+  // seat's own token, so a later take-over leaves this phone on as a co-host.
   useEffect(() => {
     const hostToken = search.get("host");
     if (hostToken && code.length === 4) {
-      saveSession({ roomCode: code, token: hostToken, name: "Venue", role: "host" });
+      saveSession({ roomCode: code, token: hostToken, name: "Venue", role: "host", hostLink: true });
       navigate(`/room/${code}`, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,7 +153,13 @@ export function HomePage() {
             )}
           </>
         )}
-        {info?.hostOpen && (
+        {cohostInvite && (
+          <p className="note small">
+            You've been invited to co-host: you'll run the game with the host (pick squares, open the buzzers, judge, keep score), and you
+            don't play. The invite works once.
+          </p>
+        )}
+        {info?.hostOpen && !cohostInvite && (
           <p className="note small">
             Nobody is hosting this game yet. Join now and you'll be the host: you pick the squares, read the clues and judge the answers, and
             you don't play.
@@ -149,7 +167,7 @@ export function HomePage() {
         )}
         {info && !info.hostOpen && info.phase !== "lobby" && <p className="muted small">This game has started. You can still join in.</p>}
         <button className="btn btn-primary btn-big" disabled={busy || !ready}>
-          {info?.hostOpen ? "Host this game" : "Join"}
+          {cohostInvite ? "Join as co-host" : info?.hostOpen ? "Host this game" : "Join"}
         </button>
       </form>
 
@@ -177,7 +195,7 @@ export function HomePage() {
       </footer>
 
       {/* Bar Games: back to the venue's games list. Landing page only; nothing off a box. */}
-      {!search.get("host") && <BackToGames ctx={venue} />}
+      {!search.get("host") && !cohostInvite && <BackToGames ctx={venue} />}
     </main>
   );
 }

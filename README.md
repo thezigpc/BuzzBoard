@@ -40,6 +40,11 @@ can fix a score at any time.
 The TV link is `/room/<CODE>?role=table`; the host's lobby has a button for it. A game
 works without a TV too: the clue is on every phone.
 
+**Co-hosts.** The host can tap **Add a co-host** and have someone scan the QR: a co-host
+runs the game alongside (picks squares, opens the buzzers, judges, keeps score) and
+doesn't play. The invite works once and expires after 10 minutes. Only the host can end
+the room, remove players or remove a co-host (who then plays, starting on 0).
+
 ## Boards
 
 Three sample boards ship with the game. A venue writes its own in **/admin**:

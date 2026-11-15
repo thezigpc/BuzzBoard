@@ -1,19 +1,20 @@
 # Bar Games integration: Buzz Board
 
 **Level reached: 3** (hosted, branded, connected, controllable), with `create_room`
-(including `firstJoinerHosts`), casting from the host's screen, results for the venue's
+(including `firstJoinerHosts`), hosting from the box (take-over and co-hosts), casting
+from the host's screen, results for the venue's
 leaderboards, staff sign-in and the box's admin password, running under a path prefix,
 and announcements at the top or bottom of phones and TVs.
 
-- **SDK:** 0.13.2, vendored at `vendor/bargames-sdk-0.13.2.tgz` (0.1.0 shipped on 0.11.3).
-- **Game kit:** 0.7.4, vendored at `vendor/bargames-gamekit-0.7.4.tgz`.
-- **Manifest:** [bargames.json](bargames.json), Buzz Board `0.1.3`, port 3007, with
+- **SDK:** 0.14.0, vendored at `vendor/bargames-sdk-0.14.0.tgz` (0.1.0 shipped on 0.11.3).
+- **Game kit:** 0.8.0, vendored at `vendor/bargames-gamekit-0.8.0.tgz`.
+- **Manifest:** [bargames.json](bargames.json), Buzz Board `0.2.0`, port 3007, with
   `"routing": { "basePath": true }`.
 
 ```
 $ npx bargames validate .
 ! image: not pinned by digest; releases should use image@sha256:…
-✓ buzzboard@0.1.3 (sdk level 3)
+✓ buzzboard@0.2.0 (sdk level 3)
 
 $ npx bargames check --game http://127.0.0.1:3018
 buzzboard@0.1.0 · level 3 · http://127.0.0.1:3018
@@ -92,10 +93,13 @@ Each runs the same `Room` method as the host's socket intent, then `room.broadca
 
 | Command | Room method | Refused when |
 |---|---|---|
-| `create_room` | `createVenueRoom()`: a `venue` room with an empty host seat. `hostUrl` is `/join/<code>?host=<seat token>`. With `args.firstJoinerHosts` the first phone to join takes the seat instead | The room cap is reached |
+| `create_room` | `createVenueRoom()`: a `venue` room with an empty host seat and the kit's `HostSeats({ firstJoinerHosts })`. `hostUrl` is `/join/<code>?host=<key>`. With `args.firstJoinerHosts` the first phone to join takes the seat instead, until anyone attaches to it (staff's link included) | The room cap is reached |
 | `start` | `room.startGame()` (the host's Start). From the final screen it first calls `room.playAgain()`, so it starts another game with the same players | Unknown room. A game is in progress. Nobody has joined. |
 | `next_round` | `room.nextRound()` (the host's "Skip to …" / "On to …"): the next round, then Last Call, then the final scores | Unknown room. The lobby. A clue is in play. Last Call (the host runs it). The final screen. |
 | `end` | The kit closes the room like the host's "End the room" (cause `host`) | Unknown room |
+| `host_link` | The kit's `seats.takeover()`: a new host key, `{ url }`. Then `room.takeOver(previous)`: the previous host's phone stays on as a co-host (a notice tells it) and a fresh "Venue" host seat waits for the new link. The old key stops working ("That host link has expired") | Unknown room |
+| `cohost_link` | The kit's `seats.invite()`: a single-use invite, `{ url, expiresAt }` (`args.minutes`, default 10, at most 60). The link is `/join/<code>?cohost=<invite>` | Unknown room |
+| `remove_cohost` | The kit's `seats.removeCohost()`, then `room.demoteCohost()`: that co-host plays again, on 0 (their own seat, or a team under their name), and is told | Unknown room. `args.memberId` isn't a co-host |
 
 `pause` / `resume` aren't implemented: nothing in the game advances by itself except
 the buzz and Last Call clocks, which are seconds long.
@@ -103,6 +107,22 @@ the buzz and Last Call clocks, which are seconds long.
 **A venue room needs a host** to pick squares and judge answers: the staff iPad through
 `hostUrl`, or a patron through `firstJoinerHosts`. The commands alone can start it and
 move between rounds, but can't play a clue.
+
+**Hosts and co-hosts** (0.2.0, the kit's `HostSeats`, one per room in `room.seats`):
+- A phone opening the host link resumes the host seat with the link's key, then keeps the
+  seat's own token (`onResumed` in `RoomPage`), so a later take-over leaves it seated as a
+  co-host instead of locking it out.
+- Every attach to the host seat calls `seats.hostAttached()` (`bind()` in the socket
+  handlers), which closes the first-joiner offer. Before 0.2.0, staff opening the host link
+  left `hostOpen` set and the next phone to scan the QR got the same host seat.
+- A co-host (`role: "cohost"`, from a take-over or an invite) runs the game: settings,
+  start, picking, buzzers, judging, scores, rounds, Last Call, TVs. It sees the answers. Only
+  the host ends the room, removes players, invites co-hosts or removes them
+  (`requireHost` vs `requireRunner` in `Room`). A co-host's ✕ leaves the room.
+- The host's lobby (and its screen during a game) has "Add a co-host": a QR of a fresh
+  invite with its expiry, and the co-host list with Remove. Co-hosts get a "Co-host" badge.
+- `test/specs/06-bargames.test.mjs` pins the box side (the first-joiner fix, take-over,
+  invites, remove_cohost) and `04-seats.test.mjs` the host's own invites.
 
 ## Status
 
@@ -216,4 +236,4 @@ walk-through passes at the root with no box.
    guide, or have the box accept `game_result` from any game that reports results.
 2. **`bargames check` doesn't exercise `firstJoinerHosts`.** A check that sends
    `create_room` with the flag and reads `hostOpen`-style state back would need a
-   convention for status; noted in case it's wanted.
+   convention for status; noted in case it's wanted. (0.2.0's specs cover it here.)

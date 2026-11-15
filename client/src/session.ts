@@ -6,6 +6,8 @@ export interface StoredSession {
   token: string;
   name: string;
   role: Role;
+  /** Set by /join/CODE?host=<key>: `token` is the host link's key until the first resume. */
+  hostLink?: boolean;
 }
 
 // The kit's session store. Every key starts with "buzzboard_" (all the venue's games

@@ -8,7 +8,7 @@ import { createBarGames, type CommandResult } from "@bargames/sdk/server";
 import type { IncomingMessage } from "node:http";
 import { DEFAULT_GAME_NAME } from "@buzzboard/shared";
 import { createVenueRoom, HOST_CLOSE_REASON, type Rooms } from "./rooms/registry.js";
-import type { Room } from "./rooms/Room.js";
+import { cohostPath, hostPath, type Room } from "./rooms/Room.js";
 
 export const bg = createBarGames({
   gameId: "buzzboard",
@@ -74,7 +74,7 @@ export function registerBarGames(rooms: Rooms): void {
     createVenueRoom: ({ kind, title, firstJoinerHosts }) => {
       const { room, hostToken } = createVenueRoom(rooms, kind ?? "venue", title, firstJoinerHosts === true);
       room.broadcast();
-      return { room, hostUrl: `/join/${room.code}?host=${encodeURIComponent(hostToken)}` };
+      return { room, hostUrl: hostPath(room, hostToken) };
     },
     commands: {
       // The host's Start. After a finished game it starts another with the same players.
@@ -84,6 +84,22 @@ export function registerBarGames(rooms: Rooms): void {
       }),
       // The host's "Next round": on to the next round, Last Call, or the final scores.
       next_round: asHost((room) => room.nextRound()),
+    },
+    // SDK 0.14.0 / kit 0.8.0, hosting from the box: host_link (staff take over; the old
+    // host's phone stays on as a co-host), cohost_link (a single-use, expiring invite) and
+    // remove_cohost. The callbacks don't broadcast, so they do it here.
+    seats: {
+      of: (room) => room.seats,
+      hostPath,
+      cohostPath,
+      onTakeover: (room, previous) => {
+        room.takeOver(previous);
+        room.broadcast();
+      },
+      onCohostRemoved: (room, memberId) => {
+        room.demoteCohost(memberId);
+        room.broadcast();
+      },
     },
     endReason: HOST_CLOSE_REASON,
     endCause: "host",

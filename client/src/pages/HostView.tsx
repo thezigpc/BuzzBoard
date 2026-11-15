@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { basePath } from "@bargames/gamekit/client";
+import { joinUrl as venueJoinUrl } from "@bargames/sdk/client";
 import { MIN_WAGER, SETTINGS_LIMITS, type RoomSettings, type RoomView } from "@buzzboard/shared";
 import { Address, BoardGrid, QrCode, Scores, TimerBar, contestant, joinInfo, nameOf, nextUp, pts, roundLabel, shortUrl, standings } from "../components/bits";
 import { TvsPanel } from "../components/TvsPanel";
@@ -12,8 +13,12 @@ interface Props {
   act: Act;
 }
 
-/** The host's screen (a phone or the staff iPad): everything that runs the game, and the answers. */
+/**
+ * The host's screen (a phone or the staff iPad): everything that runs the game, and the
+ * answers. A co-host sees the same, less ending the room and removing people.
+ */
 export function HostView({ view, skew, act }: Props) {
+  const isHost = view.you.role === "host";
   return (
     <main className="host">
       {view.phase === "lobby" && <Lobby view={view} act={act} />}
@@ -31,12 +36,15 @@ export function HostView({ view, skew, act }: Props) {
             <button className="btn btn-ghost" onClick={() => window.confirm("Stop this game and go back to the setup screen? Scores are cleared.") && act("playAgain")}>
               Start over
             </button>
-            <button className="btn btn-danger" onClick={() => window.confirm("End this room for everyone?") && act("closeRoom")}>
-              End the room
-            </button>
+            {isHost && (
+              <button className="btn btn-danger" onClick={() => window.confirm("End this room for everyone?") && act("closeRoom")}>
+                End the room
+              </button>
+            )}
           </div>
         </details>
       )}
+      {view.phase !== "lobby" && isHost && <CohostsPanel view={view} act={act} />}
     </main>
   );
 }
@@ -111,11 +119,11 @@ function Lobby({ view, act }: Omit<Props, "skew">) {
           view.contestants.map((c) => (
             <div key={c.id} className="team">
               <strong>{c.name}</strong>
-              <People list={c.members} act={act} />
+              <People list={c.members} act={act} canRemove={view.you.role === "host"} />
             </div>
           ))
         ) : (
-          <People list={players} act={act} />
+          <People list={players} act={act} canRemove={view.you.role === "host"} />
         )}
         <button className="btn btn-primary btn-big" disabled={view.contestants.length === 0} onClick={() => act("startGame")}>
           Start the game
@@ -133,23 +141,97 @@ function Lobby({ view, act }: Omit<Props, "skew">) {
         </a>
         <p className="muted small break">{shortUrl(tvUrl)}</p>
       </section>
+      {view.you.role === "host" && <CohostsPanel view={view} act={act} />}
       <TvsPanel code={view.code} />
     </>
   );
 }
 
-function People({ list, act }: { list: { id: string; name: string; connected: boolean }[]; act: Act }) {
+function People({ list, act, canRemove }: { list: { id: string; name: string; connected: boolean }[]; act: Act; canRemove: boolean }) {
   return (
     <ul className="people">
       {list.map((p) => (
         <li key={p.id} className={p.connected ? "" : "away"}>
           <span>{p.name}</span>
-          <button className="icon-btn small" aria-label={`Remove ${p.name}`} title="Remove" onClick={() => window.confirm(`Remove ${p.name} from the room?`) && act("kickPlayer", p.id)}>
-            ✕
-          </button>
+          {canRemove && (
+            <button className="icon-btn small" aria-label={`Remove ${p.name}`} title="Remove" onClick={() => window.confirm(`Remove ${p.name} from the room?`) && act("kickPlayer", p.id)}>
+              ✕
+            </button>
+          )}
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Co-hosts (0.2.0, the kit's HostSeats): a QR of a single-use invite that expires, and the
+ * co-host list. A co-host runs the game but can't end the room or remove anyone. Host only.
+ */
+function CohostsPanel({ view, act }: { view: RoomView; act: Act }) {
+  const venue = useVenue();
+  const [invite, setInvite] = useState<{ url: string; expiresAt: string; count: number } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const count = view.cohosts.length;
+  const expired = invite ? Date.parse(invite.expiresAt) <= now : false;
+  useEffect(() => {
+    if (!invite) return;
+    const t = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(t);
+  }, [invite]);
+  // Someone joined as a co-host: the code works only once, so put it away.
+  useEffect(() => {
+    if (invite && count > invite.count) setInvite(null);
+  }, [count, invite]);
+  const add = async () => {
+    const res = await act<{ path: string; expiresAt: string }>("cohostInvite");
+    if (!res) return;
+    setNow(Date.now());
+    setInvite({ url: venueJoinUrl(venue, res.path), expiresAt: res.expiresAt, count });
+  };
+  const until = invite ? new Date(invite.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+  return (
+    <section className="panel cohosts">
+      <h2>
+        Co-hosts <span className="muted">({count})</span>
+      </h2>
+      <p className="muted small">
+        A co-host runs the game with you (picks squares, opens the buzzers, judges, keeps score) but can't end the room or remove anyone.
+      </p>
+      {invite && !expired ? (
+        <div className="invite-row">
+          <QrCode text={invite.url} size={160} />
+          <div>
+            <p>Scan with the co-host's phone.</p>
+            <p className="muted small">Works once, until {until}.</p>
+            <button className="btn btn-ghost btn-small" onClick={() => setInvite(null)}>
+              Hide
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button className="btn btn-secondary" onClick={add}>
+          {expired ? "That invite expired: make a new one" : "Add a co-host"}
+        </button>
+      )}
+      {count > 0 && (
+        <ul className="people">
+          {view.cohosts.map((c) => (
+            <li key={c.id} className={c.connected ? "" : "away"}>
+              <span>
+                {c.name} <span className="badge">Co-host</span>
+              </span>
+              <button
+                className="btn btn-ghost btn-small"
+                onClick={() => window.confirm(`Make ${c.name} a player again? They lose the host controls.`) && act("removeCohost", c.id)}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -440,9 +522,11 @@ function Final({ view, act }: Omit<Props, "skew">) {
         <button className="btn btn-primary" onClick={() => act("playAgain")}>
           Play again
         </button>
-        <button className="btn btn-ghost" onClick={() => window.confirm("End this room for everyone?") && act("closeRoom")}>
-          End the room
-        </button>
+        {view.you.role === "host" && (
+          <button className="btn btn-ghost" onClick={() => window.confirm("End this room for everyone?") && act("closeRoom")}>
+            End the room
+          </button>
+        )}
       </div>
     </section>
   );

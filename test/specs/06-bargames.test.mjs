@@ -388,6 +388,124 @@ describe("on a box", () => {
     await command("end", code);
   });
 
+  // ---------------------------------------- hosting from the box (SDK 0.14.0, kit 0.8.0)
+  const keyOf = (url) => new URL(url, server.url).searchParams.get("host");
+  const inviteOf = (url) => new URL(url, server.url).searchParams.get("cohost");
+  const notices = (c) => {
+    const list = [];
+    c.socket.on("notice", ({ message }) => list.push(message));
+    return list;
+  };
+
+  test("firstJoinerHosts: once staff open the host link, the next phone to join is a player", async () => {
+    const created = await command("create_room", undefined, { kind: "venue", firstJoinerHosts: true });
+    const { roomCode: code, hostUrl } = created.data;
+    const tv = await server.client();
+    await tv.ok("joinRoom", { code, role: "table" });
+    await tv.waitFor((s) => s.hostOpen === true, "the offer is open");
+    // Staff open the host link first (0.1.x: this left the offer open, and the next phone got the same seat).
+    const ipad = await server.client();
+    const seat = await ipad.ok("resume", { code, token: keyOf(hostUrl), host: true });
+    assert.equal(seat.role, "host");
+    assert.notEqual(seat.token, keyOf(hostUrl), "the phone gets its own seat token, not the link's key");
+    await tv.waitFor((s) => s.hostOpen === false, "the offer closed");
+    const phone = await server.client();
+    assert.equal((await phone.ok("roomInfo", { code })).hostOpen, false);
+    const joined = await phone.ok("joinRoom", { code, role: "player", name: "Ann" });
+    assert.equal(joined.role, "player");
+    assert.notEqual(joined.memberId, seat.memberId);
+    await command("end", code);
+  });
+
+  test("host_link: staff take over with a new link; the old link is dead and the old host is a co-host", async () => {
+    const created = await command("create_room", undefined, { kind: "venue", firstJoinerHosts: true });
+    const { roomCode: code, hostUrl } = created.data;
+    const sam = await server.client();
+    const samNotices = notices(sam);
+    const samSeat = await sam.ok("joinRoom", { code, role: "player", name: "Sam" });
+    assert.equal(samSeat.role, "host");
+    const ann = await server.client();
+    const annSeat = await ann.ok("joinRoom", { code, role: "player", name: "Ann" });
+
+    const first = await command("host_link", code);
+    assert.equal(first.ok, true, first.message);
+    assert.equal(new URL(first.data.url, server.url).pathname, `/join/${code}`);
+    assert.notEqual(keyOf(first.data.url), keyOf(hostUrl), "a new key");
+    // Sam stays on as a co-host, and is told.
+    const samView = await sam.waitFor((s) => s.you.role === "cohost", "Sam is a co-host");
+    assert.deepEqual(samView.cohosts.map((c) => c.name), ["Sam"]);
+    await sleep(50);
+    assert.match(samNotices.join(" "), /staff took over/i);
+    // The old link is dead; the new one opens a fresh host seat.
+    const old = await (await server.client()).emit("resume", { code, token: keyOf(hostUrl), host: true });
+    assert.equal(old.ok, false);
+    assert.match(old.error, /host link has expired/i);
+    const staff = await server.client();
+    const staffSeat = await staff.ok("resume", { code, token: keyOf(first.data.url), host: true });
+    assert.equal(staffSeat.role, "host");
+    assert.notEqual(staffSeat.memberId, samSeat.memberId);
+    // Sam reloads with his own token: still a co-host.
+    const samAgain = await server.client();
+    assert.equal((await samAgain.ok("resume", { code, token: samSeat.token })).role, "cohost");
+
+    // A co-host runs the game, sees the answers, but can't end the room or remove anyone.
+    await sam.ok("startGame");
+    await sam.ok("pickSquare", { cat: 0, row: 0 });
+    const clue = await sam.waitFor((s) => s.phase === "clue" && s.clue, "the clue");
+    assert.ok(clue.clue.answer, "a co-host sees the answer");
+    await sam.ok("openBuzzers");
+    assert.equal((await ann.ok("buzz")).result, "first");
+    await sam.ok("judge", { correct: true });
+    assert.match((await sam.emit("closeRoom")).error, /only the host/i);
+    assert.match((await sam.emit("kickPlayer", annSeat.memberId)).error, /only the host/i);
+    assert.match((await sam.emit("cohostInvite")).error, /only the host/i);
+    // A second take-over: another new key, and the first one is dead too.
+    const second = await command("host_link", code);
+    assert.notEqual(keyOf(second.data.url), keyOf(first.data.url));
+    assert.equal((await (await server.client()).emit("resume", { code, token: keyOf(first.data.url), host: true })).ok, false);
+    await staff.waitFor((s) => s.you.role === "cohost", "the first staff phone is a co-host now");
+    await command("end", code);
+  });
+
+  test("cohost_link: a single-use invite that expires; remove_cohost makes them a player", async () => {
+    const created = await command("create_room", undefined, { kind: "venue" });
+    const { roomCode: code, hostUrl } = created.data;
+    const ipad = await server.client();
+    await ipad.ok("resume", { code, token: keyOf(hostUrl), host: true });
+
+    const before = Date.now();
+    const inv = await command("cohost_link", code, { minutes: 5 });
+    assert.equal(inv.ok, true, inv.message);
+    assert.equal(new URL(inv.data.url, server.url).pathname, `/join/${code}`);
+    const ttl = Date.parse(inv.data.expiresAt) - before;
+    assert.ok(ttl > 4.9 * 60_000 && ttl <= 5 * 60_000 + 1000, `expires in 5 minutes (${ttl} ms)`);
+    const capped = await command("cohost_link", code, { minutes: 600 });
+    assert.ok(Date.parse(capped.data.expiresAt) - Date.now() <= 60 * 60_000 + 1000, "60 minutes at most");
+    const dflt = await command("cohost_link", code);
+    assert.ok(Math.abs(Date.parse(dflt.data.expiresAt) - Date.now() - 10 * 60_000) < 5000, "10 minutes by default");
+
+    const cy = await server.client();
+    const cyNotices = notices(cy);
+    const seat = await cy.ok("joinRoom", { code, role: "player", name: "Cy", cohost: inviteOf(inv.data.url) });
+    assert.equal(seat.role, "cohost");
+    await ipad.waitFor((s) => s.cohosts.some((c) => c.name === "Cy"), "the host sees the co-host");
+    assert.equal(ipad.state.contestants.length, 0, "a co-host doesn't play");
+    // Single use.
+    const dee = await server.client();
+    assert.match((await dee.emit("joinRoom", { code, role: "player", name: "Dee", cohost: inviteOf(inv.data.url) })).error, /invite has expired or was already used/i);
+    assert.match((await dee.emit("joinRoom", { code, role: "player", name: "Dee", cohost: "made-up" })).error, /invite/i);
+
+    assert.equal((await command("remove_cohost", code, { memberId: "nobody" })).ok, false);
+    assert.equal((await command("remove_cohost", code, { memberId: seat.memberId })).ok, true);
+    const back = await cy.waitFor((s) => s.you.role === "player", "Cy plays again");
+    assert.ok(back.you.contestantId, "with a seat on the scoreboard");
+    assert.deepEqual(back.cohosts, []);
+    await sleep(50);
+    assert.match(cyNotices.join(" "), /not a co-host any more/i);
+    assert.match((await cy.emit("startGame")).error, /only the host/i);
+    await command("end", code);
+  });
+
   test("casting from the host's screen goes through the box, with the venue's PIN", async () => {
     const { code, host } = await room(["Ann"]);
     assert.deepEqual((await host.ok("listTvs")).tvs, TVS);

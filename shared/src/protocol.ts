@@ -5,7 +5,8 @@ import type { Board, BoardSummary } from "./board.js";
 
 export const DEFAULT_GAME_NAME = "Buzz Board";
 
-export type Role = "host" | "table" | "player";
+/** "cohost": runs the game beside the host (a staff take-over or an invite), but can't end the room or remove anyone. */
+export type Role = "host" | "cohost" | "table" | "player";
 
 /**
  * lobby     waiting for players
@@ -191,6 +192,8 @@ export interface RoomView {
   winners: string[];
   /** Nobody hosts yet: the next phone to join will. */
   hostOpen: boolean;
+  /** Host and co-hosts only: who else runs the game (empty for everyone else). */
+  cohosts: { id: string; name: string; connected: boolean }[];
   hostConnected: boolean;
   tableCount: number;
   /** Host only, in the lobby: the boards to choose from. */
@@ -232,10 +235,19 @@ export interface ClientToServerEvents {
   createRoom: (req: { name?: string }, ack: Ack<JoinResult>) => void;
   roomInfo: (req: { code: string }, ack: Ack<RoomInfo>) => void;
   joinRoom: (
-    req: { code: string; role: "player" | "table"; name?: string; team?: string; token?: string },
+    req: {
+      code: string;
+      role: "player" | "table";
+      name?: string;
+      team?: string;
+      token?: string;
+      /** A co-host invite (?cohost=): single use, expires. */
+      cohost?: string;
+    },
     ack: Ack<JoinResult>,
   ) => void;
-  resume: (req: { code: string; token: string }, ack: Ack<JoinResult>) => void;
+  /** `token`: the seat's own token, or the host link's key (`host: true`, from /join/CODE?host=). */
+  resume: (req: { code: string; token: string; host?: boolean }, ack: Ack<JoinResult>) => void;
   leaveRoom: (ack: Ack) => void;
   closeRoom: (ack: Ack) => void;
   // host
@@ -252,6 +264,10 @@ export interface ClientToServerEvents {
   adjustScore: (req: { contestantId: string; delta: number }, ack: Ack) => void;
   setPicker: (req: { contestantId: string }, ack: Ack) => void;
   kickPlayer: (memberId: string, ack: Ack) => void;
+  /** Host only: a single-use co-host invite. `path` is under the game's base path. */
+  cohostInvite: (ack: Ack<{ path: string; expiresAt: string }>) => void;
+  /** Host only: that co-host leaves the room. */
+  removeCohost: (memberId: string, ack: Ack) => void;
   playAgain: (ack: Ack) => void;
   listTvs: (ack: Ack<{ tvs: TvTargets }>) => void;
   castToTvs: (req: { ids: string[]; pin?: string }, ack: Ack<{ result: TvCastResult }>) => void;
@@ -269,6 +285,8 @@ export interface ClientToServerEvents {
 export interface ServerToClientEvents {
   state: (view: RoomView) => void;
   closed: (payload: { reason: string }) => void;
+  /** A one-off message for this phone (staff took over hosting). */
+  notice: (payload: { message: string }) => void;
 }
 
 export const ERRORS = {
@@ -280,6 +298,8 @@ export const ERRORS = {
   BAD_TOKEN: "Your seat in that room has expired. Join again.",
   NOT_IN_ROOM: "You're not in a room.",
   NOT_HOST: "Only the host can do that.",
+  BAD_HOST_LINK: "That host link has expired. Ask staff for a new one.",
+  BAD_INVITE: "That co-host invite has expired or was already used. Ask the host for a new one.",
   NOT_PLAYER: "Only players can do that.",
   NOT_YOUR_PICK: "It isn't your pick.",
   WRONG_PHASE: "That can't be done right now.",
