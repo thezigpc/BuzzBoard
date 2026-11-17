@@ -104,6 +104,8 @@ export function TvsPanel({ code }: { code: string }) {
                 type="password"
                 value={pin}
                 onChange={(e) => setPin(e.target.value.slice(0, 32))}
+                maxLength={32}
+                autoCapitalize="none"
                 inputMode="numeric"
                 autoComplete="off"
                 placeholder="Ask the staff"

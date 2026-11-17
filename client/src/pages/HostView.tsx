@@ -244,10 +244,12 @@ function GameOptions({ view, act, lobby = false }: { view: RoomView; act: Act; l
       <span>{label}</span>
       <span className="with-unit">
         <input
-          type="number"
-          min={SETTINGS_LIMITS[key].min}
-          max={SETTINGS_LIMITS[key].max}
-          step={key === "earlyPenaltyMs" ? 50 : 1}
+          // Text with a number pad, not type="number": the kit's keyboard can't edit those.
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={String(SETTINGS_LIMITS[key].max).length}
+          onChange={(e) => (e.target.value = e.target.value.replace(/\D/g, ""))}
           defaultValue={s[key]}
           key={s[key]}
           onBlur={(e) => Number(e.target.value) !== s[key] && e.target.value !== "" && set({ [key]: Number(e.target.value) })}
@@ -341,7 +343,7 @@ function CluePhase({ view, skew, act }: Props) {
             {pts(clue.wagerMax)}, on their phone.
           </p>
           <form className="row" onSubmit={submitWager}>
-            <input type="number" inputMode="numeric" min={MIN_WAGER} max={clue.wagerMax} value={wager} onChange={(e) => setWager(e.target.value)} placeholder="Or type their wager" aria-label="Wager" />
+            <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={7} value={wager} onChange={(e) => setWager(e.target.value.replace(/\D/g, ""))} placeholder="Or type their wager" aria-label="Wager" />
             <button className="btn btn-secondary" disabled={wager === ""}>
               Set wager
             </button>

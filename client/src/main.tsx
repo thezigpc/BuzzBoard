@@ -1,11 +1,12 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { basePath, ErrorBoundary, VenueAnnouncement } from "@bargames/gamekit/client";
+import { basePath, ErrorBoundary, OnScreenKeyboard, VenueAnnouncement } from "@bargames/gamekit/client";
 import { AdminPage } from "./pages/AdminPage";
 import { HomePage } from "./pages/HomePage";
 import { RoomPage } from "./pages/RoomPage";
 import { useVenue } from "./useVenue";
+import { useKeepFormAboveKeyboard } from "./keyboardRoom";
 import "./index.css";
 
 /**
@@ -16,6 +17,7 @@ import "./index.css";
  * leaves room for. Off a box it renders nothing.
  */
 function Venue() {
+  useKeepFormAboveKeyboard();
   return <VenueAnnouncement ctx={useVenue()} />;
 }
 
@@ -32,6 +34,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        {/* Kit 0.10.3: big keys under a focused field, only on touchscreens with no keyboard of
+            their own (a screen plugged into the box). Phones, tablets and PCs never see it. */}
+        <OnScreenKeyboard />
       </BrowserRouter>
     </ErrorBoundary>
   </React.StrictMode>,

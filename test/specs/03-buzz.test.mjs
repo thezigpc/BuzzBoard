@@ -69,10 +69,10 @@ test("a buzz before the buzzers open is ignored and locks that phone out for the
   const statesBefore = bo.states.length;
   assert.equal((await ann.ok("buzz")).result, "early");
   const mine = await ann.waitFor((s) => s.you.penaltyUntil !== null, "Ann's phone is told about its penalty");
-  // penaltyUntil is on the server's high-resolution clock, serverTime on Date.now(): they can
-  // differ by a few milliseconds, so allow a little either side of 400.
+  // Both on the server's wall clock (0.2.1: penaltyUntil used to be on the high-resolution
+  // clock, which drifts from Date.now(); 83 ms was seen).
   const left = mine.you.penaltyUntil - mine.serverTime;
-  assert.ok(left > 300 && left <= 410, `penalty left: ${left} ms`);
+  assert.ok(left > 300 && left <= 402, `penalty left: ${left} ms`);
   assert.equal(mine.clue.stage, "reading", "the clue is untouched");
   await sleep(30);
   assert.equal(bo.states.length, statesBefore, "nobody else hears about an early buzz");

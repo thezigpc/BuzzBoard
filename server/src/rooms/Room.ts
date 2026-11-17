@@ -927,6 +927,7 @@ export class Room implements KitRoom {
   }
 
   viewFor(m: Member): RoomView {
+    const now = preciseNow();
     // Host and co-hosts see the answers and the boards: they run the game.
     const isHost = m.role === "host" || m.role === "cohost";
     const players = this.players();
@@ -940,7 +941,10 @@ export class Room implements KitRoom {
         role: m.role,
         name: m.name,
         contestantId: m.contestantId,
-        penaltyUntil: m.penaltyUntil > preciseNow() ? Math.ceil(m.penaltyUntil) : null,
+        // Sent on the wall clock, like serverTime: the high-resolution clock the penalty is kept
+        // on drifts from Date.now() while the process runs (83 ms was seen), which would skew
+        // the phone's "locked" countdown.
+        penaltyUntil: m.penaltyUntil > now ? Math.ceil(Date.now() + (m.penaltyUntil - now)) : null,
       },
       phase: this.phase,
       serverTime: Date.now(),

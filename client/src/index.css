@@ -21,6 +21,8 @@
   /* A venue announcement's height at the top or bottom of the page (0 when none). */
   --ann-top: var(--bargames-announcement-top, 0px);
   --ann-bottom: var(--bargames-announcement-bottom, 0px);
+  /* Fixed bars sit above the venue's bottom strip and the kit's on-screen keyboard (0px when shut). */
+  --fixed-bottom: calc(var(--ann-bottom) + var(--bargames-keyboard, 0px));
   color-scheme: dark;
 }
 
@@ -415,7 +417,7 @@ details > summary {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--ann-bottom) + 1.2rem);
+  bottom: calc(var(--fixed-bottom) + 1.2rem);
   transform: translateX(-50%);
   background: var(--bad);
   color: #1c0307;
@@ -428,7 +430,7 @@ details > summary {
 }
 .with-buzzer .toast,
 .with-buzzer ~ .toast {
-  bottom: calc(var(--ann-bottom) + 11.5rem);
+  bottom: calc(var(--fixed-bottom) + 11.5rem);
 }
 
 /* ------------------------------------------------------- shared pieces */
@@ -685,8 +687,8 @@ button.grid-cell:active {
   position: fixed;
   left: 0;
   right: 0;
-  /* Above a venue announcement shown at the bottom of the screen. */
-  bottom: var(--ann-bottom);
+  /* Above a venue announcement shown at the bottom of the screen, and the on-screen keyboard. */
+  bottom: var(--fixed-bottom);
   z-index: 30;
   padding: 0.6rem 1rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
   background: linear-gradient(to top, var(--bg) 78%, transparent);

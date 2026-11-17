@@ -4,7 +4,7 @@ A quiz-board game for the **Bar Games box** ("Venuebox"), and playable standalon
 of categories and point values is on the venue's TV; players buzz in from their phones; a
 host runs the game. It joins Bingo and No Filter in the venue's games list.
 
-**Status: 0.2.0 released (2026-11-15; 0.1.0 on 2026-11-12).** The repo is `thezigpc/BuzzBoard` (public), the
+**Status: 0.2.1 released (2026-11-17; 0.1.0 on 2026-11-12).** The repo is `thezigpc/BuzzBoard` (public), the
 image `ghcr.io/thezigpc/buzzboard:0.1.0` pulls anonymously, and the platform session was
 asked to install it on the box. See "As built" below, [README.md](README.md) for
 players and operators, and [BARGAMES.md](BARGAMES.md) for the box integration report.
@@ -109,7 +109,7 @@ The box, its SDK and the shared game kit are the user's other projects:
 - **A finished game to copy from:** `C:\CodeProjects\BingoDigitalGame` (same stack, level 3,
   roles host/table/player, claims the host confirms). `C:\CodeProjects\NoFilterGame` is the
   other. Read their `CLAUDE.md` and `BARGAMES.md` for how they met each rule.
-- Vendored here: `vendor/bargames-sdk-0.14.0.tgz`, `vendor/bargames-gamekit-0.8.0.tgz`
+- Vendored here: `vendor/bargames-sdk-0.14.0.tgz`, `vendor/bargames-gamekit-0.10.6.tgz`
   (install them as file dependencies, as Bingo does).
 
 ### Rules that are easy to miss
@@ -199,7 +199,8 @@ Layout: npm workspaces, the same shape as Bingo.
   anything else and passes it to `Room.buzz()`. Node runs one event at a time, so the
   first buzz handled while the stage is `open` wins; nothing a phone sends is trusted.
 - An early buzz (stage `reading`) sets that **phone's** `penaltyUntil = now + penalty`,
-  and tells only that phone. Each further early press renews it, so a masher stays
+  and tells only that phone. The view sends it on the wall clock (like `serverTime`): the
+  high-resolution clock drifts from `Date.now()` (83 ms was seen), fixed in 0.2.1. Each further early press renews it, so a masher stays
   locked while a teammate who waited can still buzz.
 - `buzz()` returns who needs a new view (`all`, `self`, `none`): ignored buzzes
   broadcast nothing, so mashing can't flood the room. The winning buzz broadcasts to
@@ -216,6 +217,10 @@ roles mirror it (`host`, `cohost`). `seatFor(token)` opens a seat by its own tok
 host link's key; `bind()` calls `noteAttached()` so any attach closes the first-joiner
 offer. Gate game actions with `requireRunner`, and ending / removing / co-host
 management with `requireHost`. See BARGAMES.md "Hosts and co-hosts".
+
+**On-screen keyboard (0.2.1):** the kit's `<OnScreenKeyboard />` in `main.tsx`. New text
+fields need `maxLength`, `type="text" inputMode="numeric"` for numbers (never `type="number"`), and a `<form onSubmit>`; new
+bottom-fixed bars use `bottom: var(--fixed-bottom)`. Test with `?bg_keyboard=1`.
 
 **Things that bit while building:**
 - The join address under a QR: `joinInfo()` (SDK `joinDisplay`: the box's short room link

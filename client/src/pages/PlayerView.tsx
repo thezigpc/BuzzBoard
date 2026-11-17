@@ -78,7 +78,7 @@ function Lobby({ view, act }: Pick<Props, "view" | "act">) {
               move(team);
             }}
           >
-            <input value={team} onChange={(e) => setTeam(e.target.value.slice(0, NAME_MAX))} placeholder="Or start a new team" aria-label="New team name" />
+            <input value={team} maxLength={NAME_MAX} onChange={(e) => setTeam(e.target.value.slice(0, NAME_MAX))} placeholder="Or start a new team" aria-label="New team name" />
             <button className="btn btn-secondary" disabled={!team.trim()}>
               Go
             </button>
@@ -135,7 +135,7 @@ function Clue({ view, skew, act }: Pick<Props, "view" | "skew" | "act">) {
             <p className="status live">Double Down! Only you answer this one. How much do you wager?</p>
             <label>
               Your wager ({MIN_WAGER} to {pts(clue.wagerMax)})
-              <input type="number" inputMode="numeric" min={MIN_WAGER} max={clue.wagerMax} value={wager} onChange={(e) => setWager(e.target.value)} autoFocus />
+              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={7} value={wager} onChange={(e) => setWager(e.target.value.replace(/\D/g, ""))} autoFocus />
             </label>
             <div className="row wrap">
               {[...new Set([clue.value, Math.round(clue.wagerMax / 2), clue.wagerMax])].map((n) => (
@@ -286,7 +286,7 @@ function LastCall({ view, skew, act }: Pick<Props, "view" | "skew" | "act">) {
           )}
           <label>
             {view.settings.teams ? "Your team's wager" : "Your wager"} (0 to {pts(mine.wagerMax)})
-            <input type="number" inputMode="numeric" min={0} max={mine.wagerMax} value={wager} onChange={(e) => setWager(e.target.value)} />
+            <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={7} value={wager} onChange={(e) => setWager(e.target.value.replace(/\D/g, ""))} />
           </label>
           <div className="row wrap">
             {[...new Set([0, Math.round(mine.wagerMax / 2), mine.wagerMax])].map((n) => (
@@ -315,6 +315,7 @@ function LastCall({ view, skew, act }: Pick<Props, "view" | "skew" | "act">) {
                 {view.settings.teams ? "Your team's answer" : "Your answer"}
                 <input
                   value={answer}
+                  maxLength={LAST_CALL_ANSWER_MAX}
                   onChange={(e) => {
                     setAnswer(e.target.value.slice(0, LAST_CALL_ANSWER_MAX));
                     setSent(false);

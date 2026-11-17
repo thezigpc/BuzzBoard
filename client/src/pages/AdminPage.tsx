@@ -155,12 +155,12 @@ function PasswordForm({ status, onToken }: { status: AdminStatus; onToken: (t: s
       )}
       <label>
         Password
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={setup ? "new-password" : "current-password"} autoFocus />
+        <input type="password" value={password} maxLength={200} autoCapitalize="none" onChange={(e) => setPassword(e.target.value)} autoComplete={setup ? "new-password" : "current-password"} autoFocus />
       </label>
       {setup && (
         <label>
           Confirm password
-          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
+          <input type="password" value={confirm} maxLength={200} autoCapitalize="none" onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
         </label>
       )}
       {error && <p className="error">{error}</p>}
@@ -403,7 +403,7 @@ function Dashboard({ token, onSignOut, onExpired }: { token: string; onSignOut: 
         <form className="admin-form" onSubmit={saveIdle}>
           <label>
             Close a room automatically after this many minutes with no activity
-            <input type="number" min={min} max={max} value={idle} onChange={(e) => setIdle(e.target.value)} />
+            <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={idle} onChange={(e) => setIdle(e.target.value.replace(/\D/g, ""))} />
           </label>
           <button className="btn btn-primary" disabled={!data || Number(idle) === data.settings.roomIdleMinutes}>
             Save

@@ -7,14 +7,14 @@ leaderboards, staff sign-in and the box's admin password, running under a path p
 and announcements at the top or bottom of phones and TVs.
 
 - **SDK:** 0.14.0, vendored at `vendor/bargames-sdk-0.14.0.tgz` (0.1.0 shipped on 0.11.3).
-- **Game kit:** 0.8.0, vendored at `vendor/bargames-gamekit-0.8.0.tgz`.
-- **Manifest:** [bargames.json](bargames.json), Buzz Board `0.2.0`, port 3007, with
+- **Game kit:** 0.10.6, vendored at `vendor/bargames-gamekit-0.10.6.tgz`.
+- **Manifest:** [bargames.json](bargames.json), Buzz Board `0.2.1`, port 3007, with
   `"routing": { "basePath": true }`.
 
 ```
 $ npx bargames validate .
 ! image: not pinned by digest; releases should use image@sha256:…
-✓ buzzboard@0.2.0 (sdk level 3)
+✓ buzzboard@0.2.1 (sdk level 3)
 
 $ npx bargames check --game http://127.0.0.1:3018
 buzzboard@0.1.0 · level 3 · http://127.0.0.1:3018
@@ -170,6 +170,28 @@ wraps before it shrinks and stays readable. Each box keeps its own width cap (`.
 (`play.the-hollow-oak-tavern-grill.net/AB12`) and, with room links off, the 46-character game
 address, at 1920x1080, 1366x768, 1080x1920 and 3840x2160, and on the host's phone and iPad:
 nothing overflows, clips or overlaps.
+
+## On-screen keyboard (0.2.1, kit 0.10.6)
+
+`<OnScreenKeyboard />` is mounted once in `client/src/main.tsx`, so every page has it (join,
+player, host, admin; the TV has no fields). It shows only on touchscreens with no keyboard
+of their own (a screen plugged into the box); phones, tablets and PCs never see it.
+- Every text field is a real `<input>`/`<textarea>` with `maxLength`; numbers are
+  `type="text" inputMode="numeric"` (the number pad; the kit's ⌫ can't edit
+  `type="number"`), filtered to digits. The join, team, wager, Last Call answer and admin
+  sign-in fields sit in a `<form onSubmit>`, so the keyboard's Enter sends them. The admin
+  password and the TV PIN have `autoCapitalize="none"`.
+- Fixed bars (the Buzz bar, toasts) sit at `--fixed-bottom`: the venue's bottom strip plus
+  the kit's `--bargames-keyboard`.
+- `useKeepFormAboveKeyboard()` (`client/src/keyboardRoom.ts`) scrolls the focused field's
+  form button (Join, Lock it in, Send) above the keys; without it the Join button was 13px
+  under them at 1080p.
+- Checked on the mock box with `?bg_keyboard=1` at 1920x1080 and 3840x2160: a room code, a
+  name, a new team, the Last Call wager (number pad) and answer, and the admin password,
+  all typed on the keys and sent with Enter; a second kiosk picked its team from the kit's
+  big-button dropdown list; nothing covered. A 390px phone without the
+  flag: no keyboard, no padding.
+- Nobody uses a Buzz Board screen in turn like a kiosk, so `useSharedScreen()` isn't used.
 
 ## Branding and the shared address
 

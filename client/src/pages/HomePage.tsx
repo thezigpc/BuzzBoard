@@ -122,6 +122,7 @@ export function HomePage() {
             onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4))}
             placeholder="ABCD"
             autoCapitalize="characters"
+            maxLength={4}
             autoComplete="off"
             inputMode="text"
             className="code-input"
@@ -129,7 +130,7 @@ export function HomePage() {
         </label>
         <label>
           Your name
-          <input value={name} onChange={(e) => setName(e.target.value.slice(0, NAME_MAX))} placeholder="Name" autoComplete="nickname" />
+          <input value={name} maxLength={NAME_MAX} onChange={(e) => setName(e.target.value.slice(0, NAME_MAX))} placeholder="Name" autoComplete="nickname" />
         </label>
         {teams && (
           <>
@@ -148,7 +149,7 @@ export function HomePage() {
             {team === NEW_TEAM && (
               <label>
                 New team's name
-                <input value={newTeam} onChange={(e) => setNewTeam(e.target.value.slice(0, NAME_MAX))} placeholder="Table 4, The Quizzards…" />
+                <input value={newTeam} maxLength={NAME_MAX} onChange={(e) => setNewTeam(e.target.value.slice(0, NAME_MAX))} placeholder="Table 4, The Quizzards…" />
               </label>
             )}
           </>
